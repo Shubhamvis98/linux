@@ -1,0 +1,81 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/display/panel/xiaomi,k3s-42-02-0a.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Xiaomi k3s 42 02 0a DSC AMOLED DSI panel
+
+maintainers:
+  - Shubham Vishwakarma <shubhamvis98@fossfrog.in>
+
+description:
+  1080x2400 AMOLED command mode panel with a Novatek DDIC, driven over a
+  4-lane MIPI DSI link with Display Stream Compression (one 1080px slice
+  per line, 8bpp, 10bpc). Used in the Xiaomi Mi 11T Pro (vili).
+
+allOf:
+  - $ref: panel-common.yaml#
+
+properties:
+  compatible:
+    const: xiaomi,k3s-42-02-0a
+
+  reg:
+    maxItems: 1
+    description: DSI virtual channel
+
+  vddio-supply:
+    description: 1.8V I/O supply
+
+  dvdd-supply:
+    description: Digital core supply
+
+  vdd-supply:
+    description: 3.0V panel supply
+
+  avdd-supply:
+    description: Analog AMOLED supply
+
+  reset-gpios: true
+  port: true
+
+additionalProperties: false
+
+required:
+  - compatible
+  - reg
+  - vddio-supply
+  - dvdd-supply
+  - vdd-supply
+  - avdd-supply
+  - reset-gpios
+  - port
+
+examples:
+  - |
+    #include <dt-bindings/gpio/gpio.h>
+
+    dsi {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        panel@0 {
+            compatible = "xiaomi,k3s-42-02-0a";
+            reg = <0>;
+
+            reset-gpios = <&tlmm 24 GPIO_ACTIVE_LOW>;
+
+            vddio-supply = <&vreg_l12c_1p8>;
+            dvdd-supply = <&vreg_l1b_0p88>;
+            vdd-supply = <&vreg_l13c_3p0>;
+            avdd-supply = <&panel_avdd>;
+
+            port {
+                panel_in: endpoint {
+                    remote-endpoint = <&dsi0_out>;
+                };
+            };
+        };
+    };
+...
