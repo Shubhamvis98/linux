@@ -58,7 +58,7 @@ int initTestToDo(void)
 	/*** Initialize Limit File ***/
 	limit_file.size = 0;
 	limit_file.data = NULL;
-	strlcpy(limit_file.name, " ", MAX_LIMIT_FILE_NAME);
+	strscpy(limit_file.name, " ", MAX_LIMIT_FILE_NAME);
 	tests.SelfHoverForceRaw = 0;		/* /< SS Hover Force Raw min/Max test */
 	tests.SelfHoverSenceRaw = 0;		/* /< SS Hover Sence Raw min/Max test */
 	tests.SelfHoverForceIxTotal = 0;	/* /< SS Hover Total Force Ix min/Max (for each node)* test */
@@ -5755,7 +5755,7 @@ int getLimitsFile(const char *path, LimitFile *file)
 		file->size = 0;
 	}
 
-	strlcpy(file->name, path, MAX_LIMIT_FILE_NAME);
+	strscpy(file->name, path, MAX_LIMIT_FILE_NAME);
 
 	if (strncmp(path, "NULL", 4) == 0) {
 #ifdef LIMITS_H_FILE
@@ -5843,7 +5843,7 @@ int freeLimitsFile(LimitFile *file)
 			logError(0, "%s Limit File was already freed!\n", tag);
 
 		file->size = 0;
-		strlcpy(file->name, " ", MAX_LIMIT_FILE_NAME);
+		strscpy(file->name, " ", MAX_LIMIT_FILE_NAME);
 		return OK;
 	} else {
 		logError(1, "%s Passed a NULL argument! ERROR %08X \n", tag,

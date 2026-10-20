@@ -53,7 +53,7 @@ char *printHex(char *label, u8 *buff, int count, u8 *result)
 
 	offset = strlen(label);
 
-	strlcpy(result, label, offset);
+	strscpy(result, label, offset);
 
 	for (i = 0; i < count; i++) {
 		snprintf(temp, 4, "%02X ", buff[i]);
@@ -73,7 +73,7 @@ char *printHex_data(char *label, u8 *buff, int count)
 	    (char *)kmalloc(((offset + 4 * count) + 1) * sizeof(char),
 			    GFP_KERNEL);
 	if (result != NULL) {
-		strlcpy(result, label, offset);
+		strscpy(result, label, offset);
 
 		for (i = 0; i < count; i++) {
 			snprintf(&result[offset], 4, "%02X ", buff[i]);

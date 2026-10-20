@@ -34,6 +34,7 @@
 #include <linux/kernel.h>
 #include <linux/module.h>
 #include <linux/slab.h>
+#include <linux/vmalloc.h>
 #include <linux/input.h>
 #include <linux/input/mt.h>
 #include <linux/interrupt.h>
@@ -2523,7 +2524,7 @@ static void fts_get_strength_work(struct work_struct *work)
 }
 static void fts_get_strength_timer(struct timer_list *t)
 {
-	struct fts_ts_info *info = from_timer(info, t, strength_timer);
+	struct fts_ts_info *info = timer_container_of(info, t, strength_timer);
 
 	if (info->enable_touch_raw) {
 		schedule_work(&info->strength_work);
@@ -7894,7 +7895,7 @@ ProbeErrorExit_8:
 	class_destroy(info->fts_tp_class);
 	info->fts_tp_class = NULL;
 */
-	del_timer_sync(&info->strength_timer);
+	timer_delete_sync(&info->strength_timer);
 	cancel_work_sync(&info->strength_work);
 ProbeErrorExit_7:
 	if (info->tp_selftest_proc)
@@ -7989,7 +7990,7 @@ static void fts_remove(struct spi_device *client)
 	class_destroy(info->fts_tp_class);
 	info->fts_tp_class = NULL;
 */
-	del_timer_sync(&info->strength_timer);
+	timer_delete_sync(&info->strength_timer);
 	cancel_work_sync(&info->strength_work);
 
 	fts_enable_reg(info, false);
