@@ -685,7 +685,9 @@ void dpu_encoder_update_topology(struct drm_encoder *drm_enc,
 		 */
 		WARN(topology->num_intf > 2,
 		     "DSC topology cannot support more than 2 interfaces\n");
-		if (topology->num_intf >= 2 || dpu_kms->catalog->dsc_count >= 2)
+		if (topology->num_intf == 1 && dsc->slice_count == 1)
+			topology->num_dsc = 1;	/* 1:1:1, one slice per line */
+		else if (topology->num_intf >= 2 || dpu_kms->catalog->dsc_count >= 2)
 			topology->num_dsc = 2;
 		else
 			topology->num_dsc = 1;
