@@ -1973,6 +1973,27 @@ dpu_encoder_dsc_initial_line_calc(struct drm_dsc_config *dsc,
 	 * 5. 6 additional pixels as the output of the rate buffer is
 	 *    48 bits wide
 	 */
+	if (dsc->bits_per_component == 10) {
+		/*
+		 * Hardent core latency model (rtl_max_bpc 10, 64-bit output
+		 * buffer, RGB): the simplified formula below under-estimates
+		 * the initial lines for 10bpc, starving the output buffer.
+		 */
+		int bpp = dsc->bits_per_pixel >> 4;
+		int ss = soft_slice_per_enc ?: 1;
+		int max_ssm_delay = 4 * (10 + 1) + 48 - 1;
+		int in_lat = 28 + 3 * (max_ssm_delay + 2) * ss;
+		int ob_w = 64;
+		int obuf_lat = DIV_ROUND_UP(9 * ob_w + 48, bpp) + 1;
+		int chunk_bits = 8 * dsc->slice_chunk_size;
+		int extra_bits = (ss > 1 && ob_w > bpp) ? chunk_bits :
+				 (((ob_w - bpp) * chunk_bits) >> 6);
+
+		total_pixels = dsc->initial_xmit_delay + in_lat + obuf_lat +
+			       DIV_ROUND_UP(extra_bits, bpp);
+		return DIV_ROUND_UP(total_pixels, dsc->slice_width);
+	}
+
 	ssm_delay = ((dsc->bits_per_component < 10) ? 84 : 92);
 	total_pixels = ssm_delay * 3 + dsc->initial_xmit_delay + 47;
 	if (soft_slice_per_enc > 1)
