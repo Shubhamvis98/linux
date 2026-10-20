@@ -8202,6 +8202,13 @@ T:	git https://gitlab.freedesktop.org/drm/misc/kernel.git
 F:	Documentation/devicetree/bindings/display/panel/samsung,lms380kf01.yaml
 F:	drivers/gpu/drm/panel/panel-widechips-ws2401.c
 
+DRM DRIVER FOR XIAOMI K3S 42 02 0A PANELS
+M:	Shubham Vishwakarma <shubhamvis98@fossfrog.in>
+S:	Maintained
+T:	git https://gitlab.freedesktop.org/drm/misc/kernel.git
+F:	Documentation/devicetree/bindings/display/panel/xiaomi,k3s-42-02-0a.yaml
+F:	drivers/gpu/drm/panel/panel-k3s-42-02-0a-dsc.c
+
 DRM DRIVERS
 M:	David Airlie <airlied@gmail.com>
 M:	Simona Vetter <simona@ffwll.ch>
