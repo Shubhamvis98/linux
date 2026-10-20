@@ -1,6 +1,6 @@
 config TOUCHSCREEN_ST_FTS_V521_SPI
-	tristate "ST FTS V521 I2C Touchscreen"
-	depends on I2C
+	tristate "ST FTS V521 SPI Touchscreen"
+	depends on SPI
 	help
 	  Say Y here if you have ST FTS series I2C touchscreen.
 
