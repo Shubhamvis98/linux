@@ -213,6 +213,7 @@ struct fts_hw_platform_data {
 	unsigned long keystates;
 	bool swap_x;
 	bool swap_y;
+	bool support_super_resolution;
 	unsigned int fod_lx;
 	unsigned int fod_ly;
 	unsigned int fod_x_size;

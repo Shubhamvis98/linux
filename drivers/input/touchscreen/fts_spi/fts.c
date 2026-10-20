@@ -3659,8 +3659,13 @@ static void fts_enter_pointer_event_handler(struct fts_ts_info *info,
 	touchType = event[1] & 0x0F;
 	touchId = (event[1] & 0xF0) >> 4;
 
-	x = (((int)event[3] & 0x0F) << 8) | (event[2]);
-	y = ((int)event[4] << 4) | ((event[3] & 0xF0) >> 4);
+	if (!info->board->support_super_resolution) {
+		x = (((int)event[3] & 0x0F) << 8) | (event[2]);
+		y = ((int)event[4] << 4) | ((event[3] & 0xF0) >> 4);
+	} else {
+		x = (((int)event[3]) << 8) | (event[2]);
+		y = (((int)event[5]) << 8) | (event[4]);
+	}
 
 	distance = 0;
 	angle = (signed char)event[5];
@@ -7059,6 +7064,12 @@ static int parse_dt(struct device *dev, struct fts_hw_platform_data *bdata)
 	    of_property_read_bool(np, "fts,swap-x");
 	bdata->swap_y =
 	    of_property_read_bool(np, "fts,swap-y");
+	/*
+	 * Firmware that reports 16-bit coordinates at 10x the display
+	 * resolution instead of the packed 12-bit format (k3s/vili).
+	 */
+	bdata->support_super_resolution =
+	    of_property_read_bool(np, "fts,support-super-resolution");
 	bdata->support_fod =
 	    of_property_read_bool(np, "fts,support-fod");
 
