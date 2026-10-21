@@ -3023,8 +3023,12 @@ static int wcd938x_soc_codec_probe(struct snd_soc_component *component)
 	unsigned int variant;
 	int ret, i;
 
+	/*
+	 * Enumeration of the TX device can take well over two seconds, e.g.
+	 * ~3.4 s after card registration on SM8350 (Xiaomi Mi 11T Pro).
+	 */
 	time_left = wait_for_completion_timeout(&tx_sdw_dev->initialization_complete,
-						msecs_to_jiffies(2000));
+						msecs_to_jiffies(10000));
 	if (!time_left) {
 		dev_err(dev, "soundwire device init timeout\n");
 		return -ETIMEDOUT;
