@@ -277,8 +277,13 @@ static int a6xx_gmu_start(struct a6xx_gmu *gmu)
 
 	gmu_write(gmu, REG_A6XX_GMU_CM3_SYSRESET, 0);
 
+	/*
+	 * Cold boot of the GMU firmware normally takes 2-5 ms but has been
+	 * observed to exceed 10 ms on SM8350 (A660) when the system is idle.
+	 * Use the same 100 ms budget as the downstream driver.
+	 */
 	ret = gmu_poll_timeout(gmu, REG_A6XX_GMU_CM3_FW_INIT_RESULT, val,
-		(val & mask) == reset_val, 100, 10000);
+		(val & mask) == reset_val, 100, 100000);
 
 	if (ret)
 		DRM_DEV_ERROR(gmu->dev, "GMU firmware initialization timed out\n");
