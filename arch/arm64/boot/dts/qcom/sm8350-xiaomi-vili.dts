@@ -1077,7 +1077,70 @@
 	status = "okay";
 };
 
+/*
+ * vili firmware is built for the lahaina v2 carveout layout (bigger ADSP
+ * and SLPI regions); TZ rejects the PAS images in the mainline v1 layout.
+ */
+/delete-node/ &pil_adsp_mem;
+/delete-node/ &pil_slpi_mem;
+/delete-node/ &pil_cdsp_mem;
+/delete-node/ &pil_ipa_fw_mem;
+/delete-node/ &pil_ipa_gsi_mem;
+/delete-node/ &pil_gpu_mem;
+/delete-node/ &pil_spss_mem;
+/delete-node/ &pil_modem_mem;
+/delete-node/ &rmtfs_mem;
+
 &reserved_memory {
+	pil_adsp_mem: memory@86100000 {
+		reg = <0x0 0x86100000 0x0 0x3900000>;
+		no-map;
+	};
+
+	pil_slpi_mem: memory@89a00000 {
+		reg = <0x0 0x89a00000 0x0 0x2f00000>;
+		no-map;
+	};
+
+	pil_cdsp_mem: memory@8c900000 {
+		reg = <0x0 0x8c900000 0x0 0x1e00000>;
+		no-map;
+	};
+
+	pil_ipa_fw_mem: memory@8e700000 {
+		reg = <0x0 0x8e700000 0x0 0x10000>;
+		no-map;
+	};
+
+	pil_ipa_gsi_mem: memory@8e710000 {
+		reg = <0x0 0x8e710000 0x0 0xa000>;
+		no-map;
+	};
+
+	pil_gpu_mem: memory@8e71a000 {
+		reg = <0x0 0x8e71a000 0x0 0x2000>;
+		no-map;
+	};
+
+	pil_spss_mem: memory@8e800000 {
+		reg = <0x0 0x8e800000 0x0 0x100000>;
+		no-map;
+	};
+
+	pil_modem_mem: memory@8f000000 {
+		reg = <0x0 0x8f000000 0x0 0x10000000>;
+		no-map;
+	};
+
+	rmtfs_mem: memory@9f000000 {
+		compatible = "qcom,rmtfs-mem";
+		reg = <0x0 0x9f000000 0x0 0x280000>;
+		no-map;
+
+		qcom,client-id = <1>;
+		qcom,vmid = <QCOM_SCM_VMID_MSS_MSA>;
+	};
+
 	framebuffer@ea600000 {
 		reg = <0 0xea600000 0 0x2400000>;
 		no-map;
