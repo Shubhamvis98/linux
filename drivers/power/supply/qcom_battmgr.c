@@ -9,6 +9,7 @@
 #include <linux/module.h>
 #include <linux/mutex.h>
 #include <linux/nvmem-consumer.h>
+#include <linux/of.h>
 #include <linux/of_device.h>
 #include <linux/power_supply.h>
 #include <linux/property.h>
@@ -315,6 +316,13 @@ struct qcom_battmgr {
 
 	enum qcom_battmgr_variant variant;
 
+	/*
+	 * Some SM8350 firmware (e.g. Xiaomi vili) follows the downstream
+	 * lahaina property list, which has BATT_CONSTANT_CURRENT at id 12,
+	 * shifting every following battery property id up by one.
+	 */
+	bool bat_prop_has_const_curr;
+
 	struct power_supply *ac_psy;
 	struct power_supply *bat_psy;
 	struct power_supply *usb_psy;
@@ -453,6 +461,26 @@ static const u8 sm8350_bat_prop_map[] = {
 	[POWER_SUPPLY_PROP_CHARGE_CONTROL_END_THRESHOLD] = BATT_CHG_CTRL_END_THR,
 };
 
+#define BATT_FW_CONSTANT_CURRENT	12
+
+static unsigned int qcom_battmgr_bat_prop_to_fw(struct qcom_battmgr *battmgr,
+						unsigned int prop)
+{
+	if (battmgr->bat_prop_has_const_curr && prop >= BATT_FW_CONSTANT_CURRENT)
+		return prop + 1;
+
+	return prop;
+}
+
+static unsigned int qcom_battmgr_bat_prop_from_fw(struct qcom_battmgr *battmgr,
+						  unsigned int prop)
+{
+	if (battmgr->bat_prop_has_const_curr && prop > BATT_FW_CONSTANT_CURRENT)
+		return prop - 1;
+
+	return prop;
+}
+
 static int qcom_battmgr_bat_sm8350_update(struct qcom_battmgr *battmgr,
 					  enum power_supply_property psp)
 {
@@ -462,7 +490,7 @@ static int qcom_battmgr_bat_sm8350_update(struct qcom_battmgr *battmgr,
 	if (psp >= ARRAY_SIZE(sm8350_bat_prop_map))
 		return -EINVAL;
 
-	prop = sm8350_bat_prop_map[psp];
+	prop = qcom_battmgr_bat_prop_to_fw(battmgr, sm8350_bat_prop_map[psp]);
 
 	mutex_lock(&battmgr->lock);
 	ret = qcom_battmgr_request_property(battmgr, BATTMGR_BAT_PROPERTY_GET, prop, 0);
@@ -1385,14 +1413,15 @@ static void qcom_battmgr_sm8350_callback(struct qcom_battmgr *battmgr,
 
 	switch (opcode) {
 	case BATTMGR_BAT_PROPERTY_GET:
-		property = le32_to_cpu(resp->intval.property);
+		property = qcom_battmgr_bat_prop_from_fw(battmgr,
+				le32_to_cpu(resp->intval.property));
 		if (property == BATT_MODEL_NAME) {
 			if (payload_len != sizeof(resp->strval)) {
 				dev_warn(battmgr->dev,
 					 "invalid payload length for BATT_MODEL_NAME request: %zd\n",
 					 payload_len);
 				battmgr->error = -ENODATA;
-				return;
+				goto out_complete;
 			}
 		} else {
 			if (payload_len != sizeof(resp->intval)) {
@@ -1400,7 +1429,7 @@ static void qcom_battmgr_sm8350_callback(struct qcom_battmgr *battmgr,
 					 "invalid payload length for %#x request: %zd\n",
 					 property, payload_len);
 				battmgr->error = -ENODATA;
-				return;
+				goto out_complete;
 			}
 
 			battmgr->error = le32_to_cpu(resp->intval.result);
@@ -1491,7 +1520,7 @@ static void qcom_battmgr_sm8350_callback(struct qcom_battmgr *battmgr,
 				 "invalid payload length for %#x request: %zd\n",
 				 property, payload_len);
 			battmgr->error = -ENODATA;
-			return;
+			goto out_complete;
 		}
 
 		battmgr->error = le32_to_cpu(resp->intval.result);
@@ -1532,7 +1561,7 @@ static void qcom_battmgr_sm8350_callback(struct qcom_battmgr *battmgr,
 				 "invalid payload length for %#x request: %zd\n",
 				 property, payload_len);
 			battmgr->error = -ENODATA;
-			return;
+			goto out_complete;
 		}
 
 		battmgr->error = le32_to_cpu(resp->intval.result);
@@ -1659,6 +1688,10 @@ static int qcom_battmgr_probe(struct auxiliary_device *adev,
 		battmgr->variant = (unsigned long)match->data;
 	else
 		battmgr->variant = QCOM_BATTMGR_SM8350;
+
+	if (battmgr->variant == QCOM_BATTMGR_SM8350 &&
+	    of_machine_is_compatible("xiaomi,vili"))
+		battmgr->bat_prop_has_const_curr = true;
 
 	ret = qcom_battmgr_charge_control_thresholds_init(battmgr);
 	if (ret < 0)
