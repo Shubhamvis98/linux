@@ -121,9 +121,49 @@
 		};
 	};
 
+	wcd938x: audio-codec {
+		compatible = "qcom,wcd9385-codec";
+
+		pinctrl-0 = <&wcd_reset_n>;
+		pinctrl-names = "default";
+
+		reset-gpios = <&tlmm 88 GPIO_ACTIVE_LOW>;
+
+		vdd-buck-supply = <&pm8350_s10>;
+		vdd-rxtx-supply = <&pm8350_s10>;
+		vdd-io-supply = <&pm8350_s10>;
+		vdd-mic-bias-supply = <&vreg_bob>;
+
+		qcom,micbias1-microvolt = <2750000>;
+		qcom,micbias2-microvolt = <2750000>;
+		qcom,micbias3-microvolt = <2750000>;
+		qcom,micbias4-microvolt = <2750000>;
+		qcom,mbhc-buttons-vthreshold-microvolt = <75000 150000 237000 500000 500000 500000 500000 500000>;
+		qcom,mbhc-headset-vthreshold-microvolt = <1700000>;
+		qcom,mbhc-headphone-vthreshold-microvolt = <50000>;
+
+		qcom,rx-device = <&wcd_rx>;
+		qcom,tx-device = <&wcd_tx>;
+
+		#sound-dai-cells = <1>;
+	};
+
 	sound {
 		compatible = "qcom,sm8350-sndcard";
 		model = "Xiaomi Mi 11T Pro";
+
+		/*
+		 * Main (bottom) mic on AMIC1, back mic on AMIC4, top mic on
+		 * AMIC5, as in the downstream mixer paths.
+		 */
+		audio-routing =
+			"AMIC1", "MIC BIAS1",
+			"AMIC4", "MIC BIAS3",
+			"AMIC5", "MIC BIAS4",
+			"TX SWR_ADC0", "ADC1_OUTPUT",
+			"TX SWR_ADC1", "ADC2_OUTPUT",
+			"TX SWR_ADC2", "ADC3_OUTPUT",
+			"TX SWR_ADC3", "ADC4_OUTPUT";
 
 		pinctrl-0 = <&tert_tdm_active>;
 		pinctrl-names = "default";
@@ -165,6 +205,22 @@
 
 			codec {
 				sound-dai = <&cs35l41_rcv 0>, <&cs35l41_spk 0>;
+			};
+		};
+
+		wcd-capture-dai-link {
+			link-name = "WCD Capture";
+
+			cpu {
+				sound-dai = <&q6afedai TX_CODEC_DMA_TX_3>;
+			};
+
+			codec {
+				sound-dai = <&wcd938x 1>, <&swr2 0>, <&txmacro 0>;
+			};
+
+			platform {
+				sound-dai = <&q6routing>;
 			};
 		};
 	};
@@ -1371,11 +1427,42 @@
 	};
 };
 
+&rxmacro {
+	status = "okay";
+};
+
+&swr1 {
+	status = "okay";
+
+	wcd_rx: codec@0,4 {
+		compatible = "sdw20217010d00";
+		reg = <0 4>;
+		qcom,rx-port-mapping = <1 2 3 4 5>;
+	};
+};
+
+&swr2 {
+	status = "okay";
+
+	wcd_tx: codec@0,3 {
+		compatible = "sdw20217010d00";
+		reg = <0 3>;
+		qcom,tx-port-mapping = <1 2 3 4>;
+	};
+};
+
 &tlmm {
 	/* Fingerprint sensor and NFC-related pins shouldn't be touched by us */
 	gpio-reserved-ranges = <52 8>;
 
 	/* Downstream drives this low once at amp probe and never touches it */
+	wcd_reset_n: wcd-reset-n-state {
+		pins = "gpio88";
+		function = "gpio";
+		drive-strength = <16>;
+		output-high;
+	};
+
 	speaker-switch-hog {
 		gpio-hog;
 		gpios = <3 GPIO_ACTIVE_HIGH>;
@@ -1618,6 +1705,10 @@
 	};
 };
 
+&txmacro {
+	status = "okay";
+};
+
 &uart2 {
 	status = "okay";
 };
@@ -1694,5 +1785,9 @@
 	vdda18-supply = <&pm8350c_l1>;
 	vdda33-supply = <&pm8350_l2>;
 
+	status = "okay";
+};
+
+&vamacro {
 	status = "okay";
 };
