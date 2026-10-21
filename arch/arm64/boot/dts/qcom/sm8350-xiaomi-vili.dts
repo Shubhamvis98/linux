@@ -730,6 +730,7 @@
 
 &mpss {
 	firmware-name = "qcom/sm8350/xiaomi/vili/modem.mbn";
+	status = "okay";
 };
 
 &pcie0 {
@@ -1134,7 +1135,7 @@
 
 	rmtfs_mem: memory@9f000000 {
 		compatible = "qcom,rmtfs-mem";
-		reg = <0x0 0x9f000000 0x0 0x280000>;
+		reg = <0x0 0x9f000000 0x0 0x300000>;
 		no-map;
 
 		qcom,client-id = <1>;
