@@ -33,6 +33,8 @@ struct cs35l41_private {
 	int irq;
 	/* GPIO for /RST */
 	struct gpio_desc *reset_gpio;
+	/* ASP slot width set via set_tdm_slot, 0 to follow the sample width */
+	unsigned int asp_slot_width;
 };
 
 int cs35l41_probe(struct cs35l41_private *cs35l41, const struct cs35l41_hw_cfg *hw_cfg);

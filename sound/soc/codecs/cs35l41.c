@@ -681,6 +681,20 @@ static int cs35l41_set_channel_map(struct snd_soc_dai *dai, unsigned int tx_n,
 	return cs35l41_set_channels(cs35l41->dev, cs35l41->regmap, tx_n, tx_slot, rx_n, rx_slot);
 }
 
+static int cs35l41_set_tdm_slot(struct snd_soc_dai *dai, unsigned int tx_mask,
+				unsigned int rx_mask, int slots, int slot_width)
+{
+	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(dai->component);
+
+	/* Slot positions are configured with set_channel_map() */
+	if (slot_width < 0 || slot_width > 32)
+		return -EINVAL;
+
+	cs35l41->asp_slot_width = slot_width;
+
+	return 0;
+}
+
 static int cs35l41_set_dai_fmt(struct snd_soc_dai *dai, unsigned int fmt)
 {
 	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(dai->component);
@@ -758,7 +772,7 @@ static int cs35l41_pcm_hw_params(struct snd_pcm_substream *substream,
 {
 	struct cs35l41_private *cs35l41 = snd_soc_component_get_drvdata(dai->component);
 	unsigned int rate = params_rate(params);
-	u8 asp_wl;
+	u8 asp_wl, asp_width;
 	int i;
 
 	for (i = 0; i < ARRAY_SIZE(cs35l41_fs_rates); i++) {
@@ -772,6 +786,7 @@ static int cs35l41_pcm_hw_params(struct snd_pcm_substream *substream,
 	}
 
 	asp_wl = params_width(params);
+	asp_width = cs35l41->asp_slot_width ?: asp_wl;
 
 	regmap_update_bits(cs35l41->regmap, CS35L41_GLOBAL_CLK_CTRL,
 			   CS35L41_GLOBAL_FS_MASK,
@@ -780,14 +795,14 @@ static int cs35l41_pcm_hw_params(struct snd_pcm_substream *substream,
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
 		regmap_update_bits(cs35l41->regmap, CS35L41_SP_FORMAT,
 				   CS35L41_ASP_WIDTH_RX_MASK,
-				   asp_wl << CS35L41_ASP_WIDTH_RX_SHIFT);
+				   asp_width << CS35L41_ASP_WIDTH_RX_SHIFT);
 		regmap_update_bits(cs35l41->regmap, CS35L41_SP_RX_WL,
 				   CS35L41_ASP_RX_WL_MASK,
 				   asp_wl << CS35L41_ASP_RX_WL_SHIFT);
 	} else {
 		regmap_update_bits(cs35l41->regmap, CS35L41_SP_FORMAT,
 				   CS35L41_ASP_WIDTH_TX_MASK,
-				   asp_wl << CS35L41_ASP_WIDTH_TX_SHIFT);
+				   asp_width << CS35L41_ASP_WIDTH_TX_SHIFT);
 		regmap_update_bits(cs35l41->regmap, CS35L41_SP_TX_WL,
 				   CS35L41_ASP_TX_WL_MASK,
 				   asp_wl << CS35L41_ASP_TX_WL_SHIFT);
@@ -958,6 +973,7 @@ static const struct snd_soc_dai_ops cs35l41_ops = {
 	.hw_params = cs35l41_pcm_hw_params,
 	.set_sysclk = cs35l41_dai_set_sysclk,
 	.set_channel_map = cs35l41_set_channel_map,
+	.set_tdm_slot = cs35l41_set_tdm_slot,
 };
 
 #define CS35L41_RATES (		    \
