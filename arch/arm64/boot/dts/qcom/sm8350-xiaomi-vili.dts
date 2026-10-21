@@ -611,16 +611,10 @@
 	status = "okay";
 };
 
-&gmu {
-	/* FIXME: check_dtbs complains */
-	//firmware-name = "qcom/sm8350/xiaomi/vili/a660_gmu.bin";
-};
-
 &gpu {
-	//status = "okay";
+	status = "okay";
 
 	zap-shader {
-		memory-region = <&pil_gpu_mem>;
 		firmware-name = "qcom/sm8350/xiaomi/vili/a660_zap.mbn";
 	};
 };
