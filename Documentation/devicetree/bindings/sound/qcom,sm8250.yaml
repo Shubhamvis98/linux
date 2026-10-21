@@ -44,6 +44,7 @@ properties:
           - qcom,sc8280xp-sndcard
           - qcom,sdm845-sndcard
           - qcom,sm8250-sndcard
+          - qcom,sm8350-sndcard
           - qcom,sm8450-sndcard
           - qcom,x1e80100-sndcard
 
