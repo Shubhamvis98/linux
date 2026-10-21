@@ -5,6 +5,7 @@
 #include <linux/module.h>
 #include <linux/platform_device.h>
 #include <sound/soc.h>
+#include <sound/cs35l41.h>
 #include <sound/soc-dapm.h>
 #include <sound/pcm.h>
 #include <sound/pcm_params.h>
@@ -17,6 +18,11 @@
 #include "sdw.h"
 
 #define MI2S_BCLK_RATE		1536000
+#define TDM_SLOTS		8
+#define TDM_SLOT_WIDTH		32
+
+static unsigned int tdm_slot_offset[TDM_SLOTS] = { 0, 4, 8, 12, 16, 20, 24, 28 };
+static unsigned int tdm_slot_index[TDM_SLOTS] = { 0, 1, 2, 3, 4, 5, 6, 7 };
 
 struct sm8250_snd_data {
 	bool stream_prepared[AFE_PORT_MAX];
@@ -64,10 +70,21 @@ static int sm8250_be_hw_params_fixup(struct snd_soc_pcm_runtime *rtd,
 	struct snd_interval *channels = hw_param_interval(params,
 					SNDRV_PCM_HW_PARAM_CHANNELS);
 	struct snd_mask *fmt = hw_param_mask(params, SNDRV_PCM_HW_PARAM_FORMAT);
+	struct snd_soc_dai *cpu_dai = snd_soc_rtd_to_cpu(rtd, 0);
 
 	rate->min = rate->max = 48000;
 	channels->min = channels->max = 2;
-	snd_mask_set_format(fmt, SNDRV_PCM_FORMAT_S16_LE);
+
+	/*
+	 * 24-bit samples in 32-bit TDM slots, as used by the downstream
+	 * configuration of the TDM amplifiers.
+	 */
+	if (cpu_dai->id == TERTIARY_TDM_RX_0) {
+		snd_mask_none(fmt);
+		snd_mask_set_format(fmt, SNDRV_PCM_FORMAT_S24_LE);
+	} else {
+		snd_mask_set_format(fmt, SNDRV_PCM_FORMAT_S16_LE);
+	}
 
 	return 0;
 }
@@ -123,12 +140,87 @@ static void sm8250_snd_shutdown(struct snd_pcm_substream *substream)
 	sdw_release_stream(sruntime);
 }
 
+/*
+ * TDM playback to one amplifier per slot: codec DAI n of the link
+ * receives TDM slot n.
+ */
+static int sm8250_tdm_rx_hw_params(struct snd_pcm_substream *substream,
+				   struct snd_pcm_hw_params *params,
+				   unsigned int clk_id)
+{
+	struct snd_soc_pcm_runtime *rtd = snd_soc_substream_to_rtd(substream);
+	struct snd_soc_dai *cpu_dai = snd_soc_rtd_to_cpu(rtd, 0);
+	unsigned int channels = params_channels(params);
+	unsigned int bclk = params_rate(params) * TDM_SLOTS * TDM_SLOT_WIDTH;
+	struct snd_soc_dai *codec_dai;
+	int ret, i;
+
+	ret = snd_soc_dai_set_sysclk(cpu_dai, clk_id, bclk,
+				     SNDRV_PCM_STREAM_PLAYBACK);
+	if (ret)
+		return ret;
+
+	ret = snd_soc_dai_set_tdm_slot(cpu_dai, 0, GENMASK(channels - 1, 0),
+				       TDM_SLOTS, TDM_SLOT_WIDTH);
+	if (ret)
+		return ret;
+
+	ret = snd_soc_dai_set_channel_map(cpu_dai, 0, NULL, channels,
+					  tdm_slot_offset);
+	if (ret)
+		return ret;
+
+	for_each_rtd_codec_dais(rtd, i, codec_dai) {
+		ret = snd_soc_dai_set_fmt(codec_dai, SND_SOC_DAIFMT_BC_FC |
+					  SND_SOC_DAIFMT_DSP_A |
+					  SND_SOC_DAIFMT_NB_NF);
+		if (ret)
+			return ret;
+
+		ret = snd_soc_dai_set_tdm_slot(codec_dai, 0, BIT(i),
+					       TDM_SLOTS, TDM_SLOT_WIDTH);
+		if (ret && ret != -ENOTSUPP)
+			return ret;
+
+		/* Amplifier i plays TDM slot i */
+		ret = snd_soc_dai_set_channel_map(codec_dai, 0, NULL, 1,
+						  &tdm_slot_index[i]);
+		if (ret && ret != -ENOTSUPP)
+			return ret;
+
+		ret = snd_soc_component_set_sysclk(codec_dai->component,
+						   CS35L41_CLKID_SCLK, 0, bclk,
+						   SND_SOC_CLOCK_IN);
+		if (ret && ret != -ENOTSUPP)
+			return ret;
+
+		ret = snd_soc_dai_set_sysclk(codec_dai, 0, bclk,
+					     SND_SOC_CLOCK_IN);
+		if (ret && ret != -ENOTSUPP)
+			return ret;
+	}
+
+	return 0;
+}
+
 static int sm8250_snd_hw_params(struct snd_pcm_substream *substream,
 				struct snd_pcm_hw_params *params)
 {
 	struct snd_soc_pcm_runtime *rtd = snd_soc_substream_to_rtd(substream);
 	struct snd_soc_dai *cpu_dai = snd_soc_rtd_to_cpu(rtd, 0);
 	struct sm8250_snd_data *pdata = snd_soc_card_get_drvdata(rtd->card);
+	int ret;
+
+	switch (cpu_dai->id) {
+	case TERTIARY_TDM_RX_0:
+		ret = sm8250_tdm_rx_hw_params(substream, params,
+					      Q6AFE_LPASS_CLK_ID_TER_TDM_IBIT);
+		if (ret)
+			return ret;
+		break;
+	default:
+		break;
+	}
 
 	return qcom_snd_sdw_hw_params(substream, params, &pdata->sruntime[cpu_dai->id]);
 }
@@ -213,6 +305,7 @@ static const struct of_device_id snd_sm8250_dt_match[] = {
 	{ .compatible = "qcom,qrb4210-rb2-sndcard", .data = "sm4250" },
 	{ .compatible = "qcom,qrb5165-rb5-sndcard", .data = "sm8250" },
 	{ .compatible = "qcom,sm8250-sndcard", .data = "sm8250" },
+	{ .compatible = "qcom,sm8350-sndcard", .data = "sm8350" },
 	{}
 };
 
