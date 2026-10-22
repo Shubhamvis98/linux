@@ -20,6 +20,8 @@
 
 #include <drm/display/drm_dsc.h>
 #include <drm/display/drm_dsc_helper.h>
+#include <drm/drm_connector.h>
+#include <drm/drm_crtc.h>
 #include <drm/drm_mipi_dsi.h>
 #include <drm/drm_modes.h>
 #include <drm/drm_panel.h>
@@ -67,6 +69,7 @@ static ssize_t k3s_dcs_long_write(struct mipi_dsi_device *dsi,
 struct k3s_42_02_0a_dsc {
 	struct drm_panel panel;
 	struct mipi_dsi_device *dsi;
+	struct drm_connector *connector;
 	struct drm_dsc_config dsc;
 	struct gpio_desc *reset_gpio;
 	struct regulator_bulk_data supplies[4];
@@ -101,9 +104,57 @@ static void k3s_42_02_0a_dsc_reset(struct k3s_42_02_0a_dsc *ctx)
 	msleep(120);
 }
 
+/*
+ * Timings from the vendor DT: timing@1 (120 Hz) and timing@0 (60 Hz). Only
+ * the horizontal porches differ; the panel is told the rate via DCS 0x2f.
+ */
+#define K3S_MODE(hfp, hbp, fps) {					\
+	.clock = (1080 + (hfp) + 2 + (hbp)) * (2400 + 28 + 4 + 20) * (fps) / 1000, \
+	.hdisplay = 1080,						\
+	.hsync_start = 1080 + (hfp),					\
+	.hsync_end = 1080 + (hfp) + 2,					\
+	.htotal = 1080 + (hfp) + 2 + (hbp),				\
+	.vdisplay = 2400,						\
+	.vsync_start = 2400 + 28,					\
+	.vsync_end = 2400 + 28 + 4,					\
+	.vtotal = 2400 + 28 + 4 + 20,					\
+	.width_mm = 70,							\
+	.height_mm = 154,						\
+	.type = DRM_MODE_TYPE_DRIVER,					\
+}
+
+static const struct {
+	struct drm_display_mode mode;
+	u8 rate_sel;		/* DCS 0x2f argument */
+} k3s_42_02_0a_dsc_modes[] = {
+	{ .mode = K3S_MODE(133, 130, 120), .rate_sel = 0x02 },	/* preferred */
+	{ .mode = K3S_MODE(448, 440, 60),  .rate_sel = 0x01 },
+};
+
+/* Index of the mode the CRTC is being enabled with (0 if unknown). */
+static int k3s_42_02_0a_dsc_cur_mode(struct k3s_42_02_0a_dsc *ctx)
+{
+	struct drm_connector *connector = ctx->connector;
+	struct drm_crtc_state *crtc_state;
+	int i;
+
+	if (!connector || !connector->state || !connector->state->crtc)
+		return 0;
+
+	crtc_state = connector->state->crtc->state;
+	for (i = 0; i < ARRAY_SIZE(k3s_42_02_0a_dsc_modes); i++)
+		if (drm_mode_match(&crtc_state->mode,
+				   &k3s_42_02_0a_dsc_modes[i].mode,
+				   DRM_MODE_MATCH_TIMINGS | DRM_MODE_MATCH_CLOCK))
+			return i;
+
+	return 0;
+}
+
 static int k3s_42_02_0a_dsc_on(struct k3s_42_02_0a_dsc *ctx)
 {
 	struct mipi_dsi_device *dsi = ctx->dsi;
+	u8 rate_sel = k3s_42_02_0a_dsc_modes[k3s_42_02_0a_dsc_cur_mode(ctx)].rate_sel;
 	int err = 0;
 
 	k3s_write_seq(dsi, &err, 0xf0, 0x55, 0xaa, 0x52, 0x08, 0x00);
@@ -154,7 +205,11 @@ static int k3s_42_02_0a_dsc_on(struct k3s_42_02_0a_dsc *ctx)
 	k3s_write_seq(dsi, &err, 0xf0, 0x55, 0xaa, 0x52, 0x08, 0x00);
 	k3s_write_seq(dsi, &err, 0x6f, 0x02);
 	k3s_write_seq(dsi, &err, 0xb2, 0x08, 0x08);
-	k3s_write_seq(dsi, &err, 0x2f, 0x01);
+	/* frame rate select: 0x01 = 60 Hz, 0x02 = 120 Hz */
+	if (rate_sel == 0x02)
+		k3s_write_seq(dsi, &err, 0x2f, 0x02);
+	else
+		k3s_write_seq(dsi, &err, 0x2f, 0x01);
 	k3s_write_seq(dsi, &err, 0xf0, 0x55, 0xaa, 0x52, 0x08, 0x01);
 	k3s_write_seq(dsi, &err, 0xc3, 0x9b, 0x01, 0x94, 0xd0, 0x22, 0x02, 0x00);
 	k3s_write_seq(dsi, &err, 0xf0, 0x55, 0xaa, 0x52, 0x08, 0x00);
@@ -255,25 +310,29 @@ static int k3s_42_02_0a_dsc_unprepare(struct drm_panel *panel)
 	return 0;
 }
 
-static const struct drm_display_mode k3s_42_02_0a_dsc_mode = {
-	.clock = (1080 + 448 + 2 + 440) * (2400 + 28 + 4 + 20) * 60 / 1000,
-	.hdisplay = 1080,
-	.hsync_start = 1080 + 448,
-	.hsync_end = 1080 + 448 + 2,
-	.htotal = 1080 + 448 + 2 + 440,
-	.vdisplay = 2400,
-	.vsync_start = 2400 + 28,
-	.vsync_end = 2400 + 28 + 4,
-	.vtotal = 2400 + 28 + 4 + 20,
-	.width_mm = 70,
-	.height_mm = 154,
-	.type = DRM_MODE_TYPE_DRIVER,
-};
-
 static int k3s_42_02_0a_dsc_get_modes(struct drm_panel *panel,
 				      struct drm_connector *connector)
 {
-	return drm_connector_helper_get_modes_fixed(connector, &k3s_42_02_0a_dsc_mode);
+	struct k3s_42_02_0a_dsc *ctx = to_k3s_42_02_0a_dsc(panel);
+	struct drm_display_mode *mode;
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(k3s_42_02_0a_dsc_modes); i++) {
+		mode = drm_mode_duplicate(connector->dev,
+					  &k3s_42_02_0a_dsc_modes[i].mode);
+		if (!mode)
+			return -ENOMEM;
+		drm_mode_set_name(mode);
+		if (i == 0)
+			mode->type |= DRM_MODE_TYPE_PREFERRED;
+		drm_mode_probed_add(connector, mode);
+	}
+
+	connector->display_info.width_mm = k3s_42_02_0a_dsc_modes[0].mode.width_mm;
+	connector->display_info.height_mm = k3s_42_02_0a_dsc_modes[0].mode.height_mm;
+	ctx->connector = connector;
+
+	return i;
 }
 
 static const struct drm_panel_funcs k3s_42_02_0a_dsc_panel_funcs = {
@@ -371,11 +430,10 @@ static int k3s_42_02_0a_dsc_probe(struct mipi_dsi_device *dsi)
 	ctx->dsc.slice_height = 12;
 	/*
 	 * Stock: one slice spanning the full line (single DSC, 1:1:1
-	 * topology). The panel has a single fixed mode, so take the width
-	 * from it.
+	 * topology). All modes share the same active area.
 	 */
-	ctx->dsc.slice_width = k3s_42_02_0a_dsc_mode.hdisplay;
-	ctx->dsc.slice_count = k3s_42_02_0a_dsc_mode.hdisplay /
+	ctx->dsc.slice_width = k3s_42_02_0a_dsc_modes[0].mode.hdisplay;
+	ctx->dsc.slice_count = k3s_42_02_0a_dsc_modes[0].mode.hdisplay /
 			       ctx->dsc.slice_width;
 	ctx->dsc.bits_per_component = 10;
 	ctx->dsc.bits_per_pixel = 8 << 4; /* 4 fractional bits */
