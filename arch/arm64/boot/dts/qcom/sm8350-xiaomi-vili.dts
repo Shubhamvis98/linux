@@ -6,6 +6,7 @@
 #include <dt-bindings/regulator/qcom,rpmh-regulator.h>
 #include <dt-bindings/sound/qcom,q6afe.h>
 #include <dt-bindings/sound/qcom,q6asm.h>
+#include <dt-bindings/sound/qcom,q6voice.h>
 #include "sm8350.dtsi"
 #include "pm8350.dtsi"
 #include "pm8350b.dtsi"
@@ -189,6 +190,14 @@
 
 			cpu {
 				sound-dai = <&q6asmdai MSM_FRONTEND_DAI_MULTIMEDIA3>;
+			};
+		};
+
+		voice-dai-link {
+			link-name = "CS-Voice";
+
+			cpu {
+				sound-dai = <&q6voicedai CS_VOICE>;
 			};
 		};
 
@@ -839,6 +848,12 @@
 		qcom,tdm-data-delay = <1>;
 		qcom,tdm-data-align = <0>;
 	};
+};
+
+&q6voicedai {
+	/* <channels rate bits> of TERTIARY_TDM_RX_0 and TX_CODEC_DMA_TX_3 */
+	qcom,rx-format = <2 48000 24>;
+	qcom,tx-format = <2 48000 16>;
 };
 
 &mdss {
