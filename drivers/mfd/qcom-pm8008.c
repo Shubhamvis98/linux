@@ -41,6 +41,9 @@ enum {
 #define PM8008_PERIPH_2_BASE	0xc000
 #define PM8008_PERIPH_3_BASE	0xc100
 
+#define PM8008_MISC_CHIP_ENABLE	(PM8008_PERIPH_0_BASE + 0x50)
+#define PM8008_CHIP_ENABLE	BIT(0)
+
 #define PM8008_TEMP_ALARM_ADDR	PM8008_PERIPH_1_BASE
 #define PM8008_GPIO1_ADDR	PM8008_PERIPH_2_BASE
 #define PM8008_GPIO2_ADDR	PM8008_PERIPH_3_BASE
@@ -230,6 +233,25 @@ static int pm8008_probe(struct i2c_client *client)
 	 * for a millisecond for now anyway.
 	 */
 	usleep_range(1000, 2000);
+
+	/*
+	 * The LDOs only output when the chip is enabled. Firmware on some
+	 * boards leaves it disabled.
+	 */
+	ret = regmap_update_bits(regmap, PM8008_MISC_CHIP_ENABLE,
+				 PM8008_CHIP_ENABLE, PM8008_CHIP_ENABLE);
+	if (ret)
+		return dev_err_probe(dev, ret, "failed to enable chip\n");
+
+	/*
+	 * Some boards (e.g. Xiaomi SM8350 phones) do not route the PMIC
+	 * interrupt line. Only the regulators are usable without it.
+	 */
+	if (client->irq <= 0) {
+		dev_info(dev, "no interrupt, registering regulators only\n");
+		return devm_mfd_add_devices(dev, PLATFORM_DEVID_AUTO,
+					    pm8008_cells, 1, NULL, 0, NULL);
+	}
 
 	name = devm_kasprintf(dev, GFP_KERNEL, "%pOF-internal", dev->of_node);
 	if (!name)
