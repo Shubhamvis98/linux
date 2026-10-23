@@ -343,7 +343,12 @@
 		brightness-levels = <0 4 8 16 32 64 128 255>;
 		default-brightness-level = <6>;
 
-		status = "okay";
+		/*
+		 * The OLED panel has no PWM backlight; brightness is set over
+		 * DCS by the panel driver. Keep this disabled so userspace does
+		 * not pick a backlight device that controls nothing.
+		 */
+		status = "disabled";
 	};
 
 };
