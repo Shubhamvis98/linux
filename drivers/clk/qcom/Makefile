@@ -132,6 +132,7 @@ obj-$(CONFIG_SM_CAMCC_6350) += camcc-sm6350.o
 obj-$(CONFIG_SM_CAMCC_7150) += camcc-sm7150.o
 obj-$(CONFIG_SM_CAMCC_8150) += camcc-sm8150.o
 obj-$(CONFIG_SM_CAMCC_8250) += camcc-sm8250.o
+obj-$(CONFIG_SM_CAMCC_8350) += camcc-sm8350.o
 obj-$(CONFIG_SM_CAMCC_8450) += camcc-sm8450.o
 obj-$(CONFIG_SM_CAMCC_8550) += camcc-sm8550.o
 obj-$(CONFIG_SM_CAMCC_8650) += camcc-sm8650.o
