@@ -797,6 +797,67 @@
 	clock-frequency = <100000>;
 	status = "okay";
 
+	/* Camera PMIC; its interrupt line is not routed */
+	pm8008: pmic@8 {
+		compatible = "qcom,pm8008";
+		reg = <0x8>;
+
+		reset-gpios = <&tlmm 33 GPIO_ACTIVE_LOW>;
+
+		vdd-l1-l2-supply = <&pm8350_s12>;
+		vdd-l3-l4-supply = <&vreg_bob>;
+		vdd-l5-supply = <&vreg_bob>;
+		vdd-l6-supply = <&pm8350c_s1>;
+		vdd-l7-supply = <&vreg_bob>;
+
+		pinctrl-0 = <&pm8008_reset_n>;
+		pinctrl-names = "default";
+
+		regulators {
+			vreg_cam_l1: ldo1 {
+				regulator-name = "vreg_cam_l1";
+				regulator-min-microvolt = <1200000>;
+				regulator-max-microvolt = <1200000>;
+			};
+
+			vreg_cam_l2: ldo2 {
+				regulator-name = "vreg_cam_l2";
+				regulator-min-microvolt = <1056000>;
+				regulator-max-microvolt = <1056000>;
+			};
+
+			vreg_cam_l3: ldo3 {
+				regulator-name = "vreg_cam_l3";
+				regulator-min-microvolt = <2800000>;
+				regulator-max-microvolt = <2800000>;
+			};
+
+			vreg_cam_l4: ldo4 {
+				regulator-name = "vreg_cam_l4";
+				regulator-min-microvolt = <2704000>;
+				regulator-max-microvolt = <2704000>;
+			};
+
+			vreg_cam_l5: ldo5 {
+				regulator-name = "vreg_cam_l5";
+				regulator-min-microvolt = <2800000>;
+				regulator-max-microvolt = <2800000>;
+			};
+
+			vreg_cam_l6: ldo6 {
+				regulator-name = "vreg_cam_l6";
+				regulator-min-microvolt = <1800000>;
+				regulator-max-microvolt = <1800000>;
+			};
+
+			vreg_cam_l7: ldo7 {
+				regulator-name = "vreg_cam_l7";
+				regulator-min-microvolt = <2800000>;
+				regulator-max-microvolt = <2800000>;
+			};
+		};
+	};
+
 	typec-mux@42 {
 		compatible = "fcs,fsa4480";
 		reg = <0x42>;
@@ -1475,6 +1536,29 @@
 	/* Fingerprint sensor and NFC-related pins shouldn't be touched by us */
 	gpio-reserved-ranges = <52 8>;
 
+	pm8008_reset_n: pm8008-reset-n-state {
+		pins = "gpio33";
+		function = "gpio";
+		drive-strength = <2>;
+		bias-disable;
+	};
+
+	cam_ultra_default: cam-ultra-default-state {
+		mclk-pins {
+			pins = "gpio103";
+			function = "cam_mclk";
+			drive-strength = <2>;
+			bias-disable;
+		};
+
+		reset-pins {
+			pins = "gpio117";
+			function = "gpio";
+			drive-strength = <2>;
+			bias-disable;
+		};
+	};
+
 	/* Downstream drives this low once at amp probe and never touches it */
 	wcd_reset_n: wcd-reset-n-state {
 		pins = "gpio88";
@@ -1810,4 +1894,45 @@
 
 &vamacro {
 	status = "okay";
+};
+
+&cci0 {
+	status = "okay";
+};
+
+&cci1 {
+	status = "okay";
+};
+
+&cci1_i2c1 {
+	/* Ultra-wide, Sony IMX355 (Sunny module), CSIPHY1 */
+	camera@1a {
+		compatible = "sony,imx355";
+		reg = <0x1a>;
+
+		clocks = <&camcc CAM_CC_MCLK3_CLK>;
+		assigned-clocks = <&camcc CAM_CC_MCLK3_CLK>;
+		assigned-clock-rates = <19200000>;
+
+		power-domains = <&camcc TITAN_TOP_GDSC>;
+
+		reset-gpios = <&tlmm 117 GPIO_ACTIVE_LOW>;
+
+		dovdd-supply = <&vreg_cam_l6>;
+		avdd-supply = <&vreg_cam_l4>;
+		dvdd-supply = <&vreg_cam_l1>;
+
+		pinctrl-0 = <&cam_ultra_default>;
+		pinctrl-names = "default";
+
+		orientation = <1>;
+		rotation = <90>;
+
+		port {
+			imx355_ep: endpoint {
+				data-lanes = <1 2 3 4>;
+				link-frequencies = /bits/ 64 <360000000>;
+			};
+		};
+	};
 };
