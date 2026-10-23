@@ -347,10 +347,20 @@ static int k3s_42_02_0a_dsc_bl_update_status(struct backlight_device *bl)
 	u16 brightness = backlight_get_brightness(bl);
 	u8 buf[3] = { MIPI_DCS_SET_DISPLAY_BRIGHTNESS,
 		      brightness >> 8, brightness & 0xff };
+	struct mipi_dsi_msg msg = {
+		.channel = dsi->channel,
+		.type = MIPI_DSI_DCS_LONG_WRITE,
+		.tx_buf = buf,
+		.tx_len = sizeof(buf),
+	};
 	ssize_t ret;
 
-	/* Stock bl update is LP (dsi_lp_mode), big-endian (bl-inverted-dbv) */
-	ret = k3s_dcs_long_write(dsi, buf, sizeof(buf));
+	/*
+	 * Big-endian DBV (stock bl-inverted-dbv). Stock sends brightness
+	 * updates in HS mode (no qcom,mdss-dsi-bl-lp-mode); the panel ignores
+	 * them in LP mode while it is displaying.
+	 */
+	ret = dsi->host->ops->transfer(dsi->host, &msg);
 
 	return ret < 0 ? ret : 0;
 }
