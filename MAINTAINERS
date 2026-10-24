@@ -19053,6 +19053,14 @@ S:	Maintained
 T:	git git://linuxtv.org/media.git
 F:	drivers/media/i2c/ov13b10.c
 
+OMNIVISION OV16A1Q SENSOR DRIVER
+M:	Shubham Vishwakarma <shubhamvis98@fossfrog.in>
+L:	linux-media@vger.kernel.org
+S:	Maintained
+T:	git git://linuxtv.org/media.git
+F:	Documentation/devicetree/bindings/media/i2c/ovti,ov16a1q.yaml
+F:	drivers/media/i2c/ov16a1q.c
+
 OMNIVISION OV2680 SENSOR DRIVER
 M:	Rui Miguel Silva <rmfrfs@gmail.com>
 M:	Hans de Goede <hansg@kernel.org>
