@@ -1896,6 +1896,23 @@
 	status = "okay";
 };
 
+&camss {
+	vdda-phy-supply = <&pm8350_l5>;
+	vdda-pll-supply = <&pm8350_l6>;
+	status = "okay";
+
+	ports {
+		/* The port index denotes the CSIPHY id */
+		port@1 {
+			csiphy1_ep: endpoint {
+				clock-lanes = <7>;
+				data-lanes = <0 1 2 3>;
+				remote-endpoint = <&imx355_ep>;
+			};
+		};
+	};
+};
+
 &cci0 {
 	status = "okay";
 };
@@ -1932,6 +1949,7 @@
 			imx355_ep: endpoint {
 				data-lanes = <1 2 3 4>;
 				link-frequencies = /bits/ 64 <360000000>;
+				remote-endpoint = <&csiphy1_ep>;
 			};
 		};
 	};
