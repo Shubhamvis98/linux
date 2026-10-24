@@ -2,6 +2,7 @@
 
 #include <dt-bindings/iio/qcom,spmi-adc7-pm8350.h>
 #include <dt-bindings/iio/qcom,spmi-adc7-pm8350b.h>
+#include <dt-bindings/media/video-interfaces.h>
 #include <dt-bindings/pinctrl/qcom,pmic-gpio.h>
 #include <dt-bindings/regulator/qcom,rpmh-regulator.h>
 #include <dt-bindings/sound/qcom,q6afe.h>
@@ -312,6 +313,21 @@
 		regulator-boot-on;
 
 		pinctrl-0 = <&display_panel_avdd_en>;
+		pinctrl-names = "default";
+	};
+
+	vreg_cam_wide_vana: regulator-cam-wide-vana {
+		compatible = "regulator-fixed";
+		regulator-name = "cam_wide_vana";
+		regulator-min-microvolt = <2800000>;
+		regulator-max-microvolt = <2800000>;
+		regulator-enable-ramp-delay = <135>;
+
+		gpio = <&tlmm 66 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		vin-supply = <&vreg_bob>;
+
+		pinctrl-0 = <&cam_wide_vana_en>;
 		pinctrl-names = "default";
 	};
 
@@ -1543,6 +1559,29 @@
 		bias-disable;
 	};
 
+	cam_wide_default: cam-wide-default-state {
+		mclk-pins {
+			pins = "gpio101";
+			function = "cam_mclk";
+			drive-strength = <4>;
+			bias-disable;
+		};
+
+		reset-pins {
+			pins = "gpio16";
+			function = "gpio";
+			drive-strength = <2>;
+			bias-disable;
+		};
+	};
+
+	cam_wide_vana_en: cam-wide-vana-en-state {
+		pins = "gpio66";
+		function = "gpio";
+		drive-strength = <2>;
+		bias-disable;
+	};
+
 	cam_ultra_default: cam-ultra-default-state {
 		mclk-pins {
 			pins = "gpio103";
@@ -1910,11 +1949,54 @@
 				remote-endpoint = <&imx355_ep>;
 			};
 		};
+
+		port@2 {
+			csiphy2_ep: endpoint {
+				bus-type = <MEDIA_BUS_TYPE_CSI2_CPHY>;
+				data-lanes = <0 1 2>;
+				remote-endpoint = <&s5khm2_ep>;
+			};
+		};
 	};
 };
 
 &cci0 {
 	status = "okay";
+};
+
+&cci0_i2c1 {
+	/* Wide, Samsung S5KHM2 (Sunny module), CSIPHY2, 3-trio C-PHY */
+	camera@10 {
+		compatible = "samsung,s5khm2";
+		reg = <0x10>;
+
+		clocks = <&camcc CAM_CC_MCLK1_CLK>;
+		assigned-clocks = <&camcc CAM_CC_MCLK1_CLK>;
+		assigned-clock-rates = <19200000>;
+
+		power-domains = <&camcc TITAN_TOP_GDSC>;
+
+		reset-gpios = <&tlmm 16 GPIO_ACTIVE_LOW>;
+
+		vdig-supply = <&vreg_cam_l2>;
+		vana-supply = <&vreg_cam_wide_vana>;
+		vio-supply = <&vreg_cam_l6>;
+
+		pinctrl-0 = <&cam_wide_default>;
+		pinctrl-names = "default";
+
+		orientation = <1>;
+		rotation = <270>;
+
+		port {
+			s5khm2_ep: endpoint {
+				bus-type = <MEDIA_BUS_TYPE_CSI2_CPHY>;
+				data-lanes = <1 2 3>;
+				link-frequencies = /bits/ 64 <899200000>;
+				remote-endpoint = <&csiphy2_ep>;
+			};
+		};
+	};
 };
 
 &cci1 {
