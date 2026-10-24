@@ -1588,6 +1588,22 @@
 		bias-disable;
 	};
 
+	cam_front_default: cam-front-default-state {
+		mclk-pins {
+			pins = "gpio100";
+			function = "cam_mclk";
+			drive-strength = <4>;
+			bias-disable;
+		};
+
+		reset-pins {
+			pins = "gpio17";
+			function = "gpio";
+			drive-strength = <2>;
+			bias-disable;
+		};
+	};
+
 	cam_wide_default: cam-wide-default-state {
 		mclk-pins {
 			pins = "gpio101";
@@ -2017,11 +2033,53 @@
 				remote-endpoint = <&s5khm2_ep>;
 			};
 		};
+
+		port@3 {
+			csiphy3_ep: endpoint {
+				clock-lanes = <7>;
+				data-lanes = <0 1 2 3>;
+				remote-endpoint = <&ov16a1q_ep>;
+			};
+		};
 	};
 };
 
 &cci0 {
 	status = "okay";
+};
+
+&cci0_i2c0 {
+	/* Front, OmniVision OV16A1Q (O-Film module), CSIPHY3 */
+	camera@10 {
+		compatible = "ovti,ov16a1q";
+		reg = <0x10>;
+
+		clocks = <&camcc CAM_CC_MCLK0_CLK>;
+		assigned-clocks = <&camcc CAM_CC_MCLK0_CLK>;
+		assigned-clock-rates = <19200000>;
+
+		power-domains = <&camcc TITAN_TOP_GDSC>;
+
+		reset-gpios = <&tlmm 17 GPIO_ACTIVE_LOW>;
+
+		vio-supply = <&vreg_cam_l6>;
+		vana-supply = <&vreg_cam_l5>;
+		vdig-supply = <&vreg_cam_l1>;
+
+		pinctrl-0 = <&cam_front_default>;
+		pinctrl-names = "default";
+
+		orientation = <0>;
+		rotation = <90>;
+
+		port {
+			ov16a1q_ep: endpoint {
+				data-lanes = <1 2 3 4>;
+				link-frequencies = /bits/ 64 <384000000>;
+				remote-endpoint = <&csiphy3_ep>;
+			};
+		};
+	};
 };
 
 &cci0_i2c1 {
