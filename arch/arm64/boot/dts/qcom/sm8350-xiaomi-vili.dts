@@ -1988,6 +1988,8 @@
 		orientation = <1>;
 		rotation = <270>;
 
+		lens-focus = <&wide_vcm>;
+
 		port {
 			s5khm2_ep: endpoint {
 				bus-type = <MEDIA_BUS_TYPE_CSI2_CPHY>;
@@ -1996,6 +1998,14 @@
 				remote-endpoint = <&csiphy2_ep>;
 			};
 		};
+	};
+
+	wide_vcm: camera-lens@c {
+		compatible = "dongwoon,dw9800v";
+		reg = <0x0c>;
+
+		vdd-supply = <&vreg_cam_l7>;
+		vio-supply = <&vreg_cam_l6>;
 	};
 };
 
