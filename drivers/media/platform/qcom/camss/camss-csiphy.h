@@ -31,11 +31,13 @@ struct csiphy_lane {
  * @num_data: number of data lanes
  * @data:     data lanes configuration
  * @clk:      clock lane configuration (only for D-PHY)
+ * @cphy:     the link uses MIPI C-PHY; @data then describes trios
  */
 struct csiphy_lanes_cfg {
 	int num_data;
 	struct csiphy_lane *data;
 	struct csiphy_lane clk;
+	bool cphy;
 };
 
 struct csiphy_csi2_cfg {
@@ -86,9 +88,14 @@ struct csiphy_subdev_resources {
 	const struct csiphy_formats *formats;
 };
 
+#define CSIPHY_MAX_CPHY_TRIOS	3
+
 struct csiphy_device_regs {
 	const struct csiphy_lane_regs *lane_regs;
 	int lane_array_size;
+	/* Per-trio C-PHY lane settings, NULL if C-PHY is not supported */
+	const struct csiphy_lane_regs *cphy_lane_regs[CSIPHY_MAX_CPHY_TRIOS];
+	int cphy_lane_array_size;
 	u32 offset;
 };
 
