@@ -10,6 +10,8 @@
 
 #include <linux/delay.h>
 #include <linux/i2c.h>
+#include <linux/mod_devicetable.h>
+#include <linux/property.h>
 #include <linux/pm_runtime.h>
 #include <linux/regulator/consumer.h>
 #include <linux/types.h>
@@ -26,6 +28,7 @@
 #define DW9719_INFO			CCI_REG8(0)
 #define DW9719_ID			0xF1
 #define DW9761_ID			0xF4
+#define DW9800V_ID			0xEB
 
 #define DW9719_CONTROL			CCI_REG8(2)
 #define DW9719_STANDBY			0x00
@@ -41,10 +44,12 @@
 #define DW9719_MODE_SAC_SHIFT		4
 #define DW9719_DEFAULT_SAC		4
 #define DW9761_DEFAULT_SAC		6
+#define DW9800V_DEFAULT_SAC		8
 
 #define DW9719_VCM_FREQ			CCI_REG8(7)
 #define DW9719_DEFAULT_VCM_FREQ		0x60
 #define DW9761_DEFAULT_VCM_FREQ		0x3E
+#define DW9800V_DEFAULT_VCM_FREQ	0x07
 
 #define DW9761_VCM_PRELOAD		CCI_REG8(8)
 #define DW9761_DEFAULT_VCM_PRELOAD	0x73
@@ -55,13 +60,19 @@
 enum dw9719_model {
 	DW9719,
 	DW9761,
+	DW9800V,
+};
+
+static const char * const dw9719_supply_names[] = {
+	"vdd",	/* Driver and VCM supply */
+	"vio",	/* I2C I/O supply */
 };
 
 struct dw9719_device {
 	struct v4l2_subdev sd;
 	struct device *dev;
 	struct regmap *regmap;
-	struct regulator *regulator;
+	struct regulator_bulk_data supplies[ARRAY_SIZE(dw9719_supply_names)];
 	enum dw9719_model model;
 	u32 mode_low_bits;
 	u32 sac_mode;
@@ -75,7 +86,8 @@ struct dw9719_device {
 
 static int dw9719_power_down(struct dw9719_device *dw9719)
 {
-	return regulator_disable(dw9719->regulator);
+	return regulator_bulk_disable(ARRAY_SIZE(dw9719->supplies),
+				      dw9719->supplies);
 }
 
 static int dw9719_power_up(struct dw9719_device *dw9719, bool detect)
@@ -83,7 +95,8 @@ static int dw9719_power_up(struct dw9719_device *dw9719, bool detect)
 	u64 val;
 	int ret;
 
-	ret = regulator_enable(dw9719->regulator);
+	ret = regulator_bulk_enable(ARRAY_SIZE(dw9719->supplies),
+				    dw9719->supplies);
 	if (ret)
 		return ret;
 
@@ -97,7 +110,7 @@ static int dw9719_power_up(struct dw9719_device *dw9719, bool detect)
 	if (detect) {
 		ret = cci_read(dw9719->regmap, DW9719_INFO, &val, NULL);
 		if (ret < 0)
-			return ret;
+			goto err_power_down;
 
 		switch (val) {
 		case DW9719_ID:
@@ -112,10 +125,17 @@ static int dw9719_power_up(struct dw9719_device *dw9719, bool detect)
 			dw9719->sac_mode = DW9761_DEFAULT_SAC;
 			dw9719->vcm_freq = DW9761_DEFAULT_VCM_FREQ;
 			break;
+		case DW9800V_ID:
+			dw9719->model = DW9800V;
+			dw9719->mode_low_bits = 0x00;
+			dw9719->sac_mode = DW9800V_DEFAULT_SAC;
+			dw9719->vcm_freq = DW9800V_DEFAULT_VCM_FREQ;
+			break;
 		default:
 			dev_err(dw9719->dev,
 				"Error unknown device id 0x%02llx\n", val);
-			return -ENXIO;
+			ret = -ENXIO;
+			goto err_power_down;
 		}
 
 		/* Optional indication of SAC mode select */
@@ -137,8 +157,12 @@ static int dw9719_power_up(struct dw9719_device *dw9719, bool detect)
 			  DW9761_DEFAULT_VCM_PRELOAD, &ret);
 
 	if (ret)
-		dw9719_power_down(dw9719);
+		goto err_power_down;
 
+	return 0;
+
+err_power_down:
+	dw9719_power_down(dw9719);
 	return ret;
 }
 
@@ -281,10 +305,15 @@ static int dw9719_probe(struct i2c_client *client)
 
 	dw9719->dev = &client->dev;
 
-	dw9719->regulator = devm_regulator_get(&client->dev, "vdd");
-	if (IS_ERR(dw9719->regulator))
-		return dev_err_probe(&client->dev, PTR_ERR(dw9719->regulator),
-				     "getting regulator\n");
+	for (unsigned int i = 0; i < ARRAY_SIZE(dw9719->supplies); i++)
+		dw9719->supplies[i].supply = dw9719_supply_names[i];
+
+	ret = devm_regulator_bulk_get(&client->dev,
+				      ARRAY_SIZE(dw9719->supplies),
+				      dw9719->supplies);
+	if (ret)
+		return dev_err_probe(&client->dev, ret,
+				     "getting regulators\n");
 
 	v4l2_i2c_subdev_init(&dw9719->sd, client, &dw9719_ops);
 	dw9719->sd.flags |= V4L2_SUBDEV_FL_HAS_DEVNODE;
@@ -356,9 +385,18 @@ static void dw9719_remove(struct i2c_client *client)
 static const struct i2c_device_id dw9719_id_table[] = {
 	{ "dw9719" },
 	{ "dw9761" },
+	{ "dw9800v" },
 	{ }
 };
 MODULE_DEVICE_TABLE(i2c, dw9719_id_table);
+
+static const struct of_device_id dw9719_of_match[] = {
+	{ .compatible = "dongwoon,dw9719" },
+	{ .compatible = "dongwoon,dw9761" },
+	{ .compatible = "dongwoon,dw9800v" },
+	{ }
+};
+MODULE_DEVICE_TABLE(of, dw9719_of_match);
 
 static DEFINE_RUNTIME_DEV_PM_OPS(dw9719_pm_ops, dw9719_suspend, dw9719_resume,
 				 NULL);
@@ -367,6 +405,7 @@ static struct i2c_driver dw9719_i2c_driver = {
 	.driver = {
 		.name = "dw9719",
 		.pm = pm_sleep_ptr(&dw9719_pm_ops),
+		.of_match_table = dw9719_of_match,
 	},
 	.probe = dw9719_probe,
 	.remove = dw9719_remove,
