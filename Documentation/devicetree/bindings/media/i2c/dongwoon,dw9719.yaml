@@ -1,0 +1,70 @@
+# SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause)
+%YAML 1.2
+---
+$id: http://devicetree.org/schemas/media/i2c/dongwoon,dw9719.yaml#
+$schema: http://devicetree.org/meta-schemas/core.yaml#
+
+title: Dongwoon Anatech DW9719 family Voice Coil Motor (VCM) Lens
+
+maintainers:
+  - Shubham Vishwakarma <shubhamvis98@fossfrog.in>
+
+description:
+  The Dongwoon DW9719, DW9761 and DW9800V are 10-bit digital-to-analog
+  converters with a current sink output for driving voice coil lens actuators
+  in camera modules. They are controlled over an I2C bus and support Smart
+  Actuator Control (SAC) ringing compensation.
+
+properties:
+  compatible:
+    enum:
+      - dongwoon,dw9719
+      - dongwoon,dw9761
+      - dongwoon,dw9800v
+
+  reg:
+    maxItems: 1
+
+  vdd-supply:
+    description: Driver core and VCM output supply.
+
+  vio-supply:
+    description: I2C I/O supply.
+
+  dongwoon,sac-mode:
+    description:
+      Smart Actuator Control mode, written to the mode register. The default
+      depends on the chip model.
+    $ref: /schemas/types.yaml#/definitions/uint32
+    maximum: 15
+
+  dongwoon,vcm-freq:
+    description:
+      VCM resonance frequency setting, written to the VCM frequency register.
+      The default depends on the chip model.
+    $ref: /schemas/types.yaml#/definitions/uint32
+    maximum: 255
+
+required:
+  - compatible
+  - reg
+  - vdd-supply
+
+additionalProperties: false
+
+examples:
+  - |
+    i2c {
+        #address-cells = <1>;
+        #size-cells = <0>;
+
+        camera-lens@c {
+            compatible = "dongwoon,dw9800v";
+            reg = <0x0c>;
+
+            vdd-supply = <&vreg_cam_af>;
+            vio-supply = <&vreg_cam_io>;
+        };
+    };
+
+...
