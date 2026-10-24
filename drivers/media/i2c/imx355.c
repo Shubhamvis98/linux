@@ -60,6 +60,10 @@
 /* Flip Control */
 #define IMX355_REG_ORIENTATION		0x0101
 
+/* Readable pixel array, matching the 3280x2464 full resolution mode */
+#define IMX355_PIXEL_ARRAY_WIDTH	3280U
+#define IMX355_PIXEL_ARRAY_HEIGHT	2464U
+
 /* default link frequency and external clock */
 #define IMX355_LINK_FREQ_DEFAULT	360000000LL
 #define IMX355_EXT_CLK			19200000
@@ -1338,6 +1342,71 @@ static int imx355_get_pad_format(struct v4l2_subdev *sd,
 	return ret;
 }
 
+/* Derive the analogue crop of a mode from its X/Y address registers */
+static void imx355_mode_crop(const struct imx355_mode *mode,
+			     struct v4l2_rect *crop)
+{
+	u16 xs = 0, ys = 0, xe = IMX355_PIXEL_ARRAY_WIDTH - 1;
+	u16 ye = IMX355_PIXEL_ARRAY_HEIGHT - 1;
+	u32 i;
+
+	for (i = 0; i < mode->reg_list.num_of_regs; i++) {
+		const struct imx355_reg *reg = &mode->reg_list.regs[i];
+
+		switch (reg->address) {
+		case 0x0344: xs = (xs & 0xff) | reg->val << 8; break;
+		case 0x0345: xs = (xs & 0xff00) | reg->val; break;
+		case 0x0346: ys = (ys & 0xff) | reg->val << 8; break;
+		case 0x0347: ys = (ys & 0xff00) | reg->val; break;
+		case 0x0348: xe = (xe & 0xff) | reg->val << 8; break;
+		case 0x0349: xe = (xe & 0xff00) | reg->val; break;
+		case 0x034a: ye = (ye & 0xff) | reg->val << 8; break;
+		case 0x034b: ye = (ye & 0xff00) | reg->val; break;
+		}
+	}
+
+	crop->left = xs;
+	crop->top = ys;
+	crop->width = xe - xs + 1;
+	crop->height = ye - ys + 1;
+}
+
+static int imx355_get_selection(struct v4l2_subdev *sd,
+				struct v4l2_subdev_state *sd_state,
+				struct v4l2_subdev_selection *sel)
+{
+	struct imx355 *imx355 = to_imx355(sd);
+	const struct imx355_mode *mode = imx355->cur_mode;
+
+	switch (sel->target) {
+	case V4L2_SEL_TGT_CROP:
+		mutex_lock(&imx355->mutex);
+		if (sel->which == V4L2_SUBDEV_FORMAT_TRY) {
+			const struct v4l2_mbus_framefmt *fmt =
+				v4l2_subdev_state_get_format(sd_state, sel->pad);
+
+			mode = v4l2_find_nearest_size(supported_modes,
+						      ARRAY_SIZE(supported_modes),
+						      width, height,
+						      fmt->width, fmt->height);
+		}
+		imx355_mode_crop(mode, &sel->r);
+		mutex_unlock(&imx355->mutex);
+		return 0;
+
+	case V4L2_SEL_TGT_NATIVE_SIZE:
+	case V4L2_SEL_TGT_CROP_BOUNDS:
+	case V4L2_SEL_TGT_CROP_DEFAULT:
+		sel->r.left = 0;
+		sel->r.top = 0;
+		sel->r.width = IMX355_PIXEL_ARRAY_WIDTH;
+		sel->r.height = IMX355_PIXEL_ARRAY_HEIGHT;
+		return 0;
+	}
+
+	return -EINVAL;
+}
+
 static int
 imx355_set_pad_format(struct v4l2_subdev *sd,
 		      struct v4l2_subdev_state *sd_state,
@@ -1557,6 +1626,7 @@ static const struct v4l2_subdev_pad_ops imx355_pad_ops = {
 	.get_fmt = imx355_get_pad_format,
 	.set_fmt = imx355_set_pad_format,
 	.enum_frame_size = imx355_enum_frame_size,
+	.get_selection = imx355_get_selection,
 };
 
 static const struct v4l2_subdev_ops imx355_subdev_ops = {
