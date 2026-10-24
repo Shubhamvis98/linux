@@ -1943,7 +1943,7 @@
 		pinctrl-names = "default";
 
 		orientation = <1>;
-		rotation = <90>;
+		rotation = <270>;
 
 		port {
 			imx355_ep: endpoint {
