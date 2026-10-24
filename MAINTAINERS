@@ -22927,6 +22927,14 @@ L:	linux-media@vger.kernel.org
 S:	Supported
 F:	drivers/media/i2c/s5k5baf.c
 
+SAMSUNG S5K5E9 CAMERA DRIVER
+M:	Shubham Vishwakarma <shubhamvis98@fossfrog.in>
+L:	linux-media@vger.kernel.org
+S:	Maintained
+T:	git git://linuxtv.org/media.git
+F:	Documentation/devicetree/bindings/media/i2c/samsung,s5k5e9.yaml
+F:	drivers/media/i2c/s5k5e9.c
+
 SAMSUNG S5KHM2 CAMERA DRIVER
 M:	Shubham Vishwakarma <shubhamvis98@fossfrog.in>
 L:	linux-media@vger.kernel.org
