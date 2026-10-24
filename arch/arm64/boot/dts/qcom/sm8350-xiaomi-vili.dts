@@ -316,6 +316,21 @@
 		pinctrl-names = "default";
 	};
 
+	vreg_cam_macro_vdig: regulator-cam-macro-vdig {
+		compatible = "regulator-fixed";
+		regulator-name = "cam_macro_vdig";
+		regulator-min-microvolt = <1200000>;
+		regulator-max-microvolt = <1200000>;
+		regulator-enable-ramp-delay = <135>;
+
+		gpio = <&tlmm 74 GPIO_ACTIVE_HIGH>;
+		enable-active-high;
+		vin-supply = <&pm8350_s12>;
+
+		pinctrl-0 = <&cam_macro_vdig_en>;
+		pinctrl-names = "default";
+	};
+
 	vreg_cam_wide_vana: regulator-cam-wide-vana {
 		compatible = "regulator-fixed";
 		regulator-name = "cam_wide_vana";
@@ -1582,6 +1597,29 @@
 		bias-disable;
 	};
 
+	cam_macro_default: cam-macro-default-state {
+		mclk-pins {
+			pins = "gpio102";
+			function = "cam_mclk";
+			drive-strength = <4>;
+			bias-disable;
+		};
+
+		reset-pins {
+			pins = "gpio106";
+			function = "gpio";
+			drive-strength = <2>;
+			bias-disable;
+		};
+	};
+
+	cam_macro_vdig_en: cam-macro-vdig-en-state {
+		pins = "gpio74";
+		function = "gpio";
+		drive-strength = <2>;
+		bias-disable;
+	};
+
 	cam_ultra_default: cam-ultra-default-state {
 		mclk-pins {
 			pins = "gpio103";
@@ -1942,6 +1980,14 @@
 
 	ports {
 		/* The port index denotes the CSIPHY id */
+		port@0 {
+			csiphy0_ep: endpoint {
+				clock-lanes = <7>;
+				data-lanes = <0 1>;
+				remote-endpoint = <&s5k5e9_ep>;
+			};
+		};
+
 		port@1 {
 			csiphy1_ep: endpoint {
 				clock-lanes = <7>;
@@ -2011,6 +2057,52 @@
 
 &cci1 {
 	status = "okay";
+};
+
+&cci1_i2c0 {
+	/* Macro, Samsung S5K5E9 (Sunny module), CSIPHY0 */
+	camera@2d {
+		compatible = "samsung,s5k5e9";
+		reg = <0x2d>;
+
+		clocks = <&camcc CAM_CC_MCLK2_CLK>;
+		assigned-clocks = <&camcc CAM_CC_MCLK2_CLK>;
+		assigned-clock-rates = <19200000>;
+
+		power-domains = <&camcc TITAN_TOP_GDSC>;
+
+		reset-gpios = <&tlmm 106 GPIO_ACTIVE_LOW>;
+
+		vio-supply = <&vreg_cam_l6>;
+		vana-supply = <&vreg_cam_l3>;
+		vdig-supply = <&vreg_cam_macro_vdig>;
+
+		pinctrl-0 = <&cam_macro_default>;
+		pinctrl-names = "default";
+
+		orientation = <1>;
+		rotation = <270>;
+
+		lens-focus = <&macro_vcm>;
+
+		port {
+			s5k5e9_ep: endpoint {
+				data-lanes = <1 2>;
+				link-frequencies = /bits/ 64 <438400000>;
+				remote-endpoint = <&csiphy0_ep>;
+			};
+		};
+	};
+
+	macro_vcm: camera-lens@c {
+		compatible = "dongwoon,dw9800v";
+		reg = <0x0c>;
+
+		vdd-supply = <&vreg_cam_l7>;
+		vio-supply = <&vreg_cam_l6>;
+
+		dongwoon,vcm-freq = <0x03>;
+	};
 };
 
 &cci1_i2c1 {
