@@ -84,6 +84,7 @@ enum camss_version {
 	CAMSS_8x53,
 	CAMSS_8x96,
 	CAMSS_8250,
+	CAMSS_8350,
 	CAMSS_8280XP,
 	CAMSS_8300,
 	CAMSS_845,
