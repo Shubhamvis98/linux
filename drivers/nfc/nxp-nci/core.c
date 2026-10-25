@@ -185,15 +185,21 @@ void nxp_nci_remove(struct nci_dev *ndev)
 		nxp_nci_fw_work_complete(info, -ESHUTDOWN);
 	cancel_work_sync(&info->fw_info.work);
 
+	/*
+	 * Unregister first: if the device is up, this closes it through
+	 * nxp_nci_close(), which takes info_lock itself and needs the
+	 * controller still powered to send the closing CORE_RESET.
+	 */
+	nci_unregister_device(ndev);
+
 	mutex_lock(&info->info_lock);
 
 	if (info->phy_ops->set_mode)
 		info->phy_ops->set_mode(info->phy_id, NXP_NCI_MODE_COLD);
 
-	nci_unregister_device(ndev);
-	nci_free_device(ndev);
-
 	mutex_unlock(&info->info_lock);
+
+	nci_free_device(ndev);
 }
 EXPORT_SYMBOL(nxp_nci_remove);
 
