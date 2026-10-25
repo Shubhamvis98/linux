@@ -914,7 +914,18 @@
 	clock-frequency = <400000>;
 	status = "okay";
 
-	/* sn-nci NFC controller @ 28 */
+	nfc@28 {
+		compatible = "nxp,nxp-nci-i2c";
+		reg = <0x28>;
+
+		interrupts-extended = <&tlmm 87 IRQ_TYPE_EDGE_RISING>;
+
+		enable-gpios = <&tlmm 62 GPIO_ACTIVE_HIGH>;
+		firmware-gpios = <&tlmm 86 GPIO_ACTIVE_HIGH>;
+
+		pinctrl-0 = <&nfc_default>;
+		pinctrl-names = "default";
+	};
 };
 
 &gpi_dma0 {
@@ -1586,6 +1597,29 @@
 		function = "gpio";
 		drive-strength = <2>;
 		bias-disable;
+	};
+
+	nfc_default: nfc-default-state {
+		en-pins {
+			pins = "gpio62", "gpio86";
+			function = "gpio";
+			drive-strength = <2>;
+			bias-disable;
+		};
+
+		clkreq-pins {
+			pins = "gpio63";
+			function = "gpio";
+			drive-strength = <2>;
+			bias-pull-down;
+		};
+
+		irq-pins {
+			pins = "gpio87";
+			function = "gpio";
+			drive-strength = <2>;
+			bias-pull-down;
+		};
 	};
 
 	cam_front_default: cam-front-default-state {
