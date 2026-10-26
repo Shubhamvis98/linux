@@ -440,6 +440,11 @@ void nci_rsp_packet(struct nci_dev *ndev, struct sk_buff *skb)
 		nci_rf_deactivate_rsp_packet(ndev, skb);
 		break;
 
+	case NCI_OP_RF_SET_LISTEN_MODE_ROUTING_RSP:
+		nci_req_complete(ndev, skb->len ? skb->data[0] :
+				 NCI_STATUS_SYNTAX_ERROR);
+		break;
+
 	case NCI_OP_NFCEE_DISCOVER_RSP:
 		nci_nfcee_discover_rsp_packet(ndev, skb);
 		break;

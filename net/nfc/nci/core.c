@@ -294,6 +294,24 @@ static void nci_rf_discover_req(struct nci_dev *ndev, const void *opt)
 		cmd.num_disc_configs++;
 	}
 
+	/* Card emulation: ISO-DEP over NFC-A (listen A may already be set) */
+	if ((cmd.num_disc_configs < NCI_MAX_NUM_RF_CONFIGS) &&
+	    (param->tm_protocols & NFC_PROTO_ISO14443_MASK) &&
+	    !(param->tm_protocols & NFC_PROTO_NFC_DEP_MASK)) {
+		cmd.disc_configs[cmd.num_disc_configs].rf_tech_and_mode =
+			NCI_NFC_A_PASSIVE_LISTEN_MODE;
+		cmd.disc_configs[cmd.num_disc_configs].frequency = 1;
+		cmd.num_disc_configs++;
+	}
+
+	if ((cmd.num_disc_configs < NCI_MAX_NUM_RF_CONFIGS) &&
+	    (param->tm_protocols & NFC_PROTO_ISO14443_B_MASK)) {
+		cmd.disc_configs[cmd.num_disc_configs].rf_tech_and_mode =
+			NCI_NFC_B_PASSIVE_LISTEN_MODE;
+		cmd.disc_configs[cmd.num_disc_configs].frequency = 1;
+		cmd.num_disc_configs++;
+	}
+
 	nci_send_cmd(ndev, NCI_OP_RF_DISCOVER_CMD,
 		     (1 + (cmd.num_disc_configs * sizeof(struct disc_config))),
 		     &cmd);
@@ -825,6 +843,75 @@ static int nci_set_listen_parameters(struct nfc_dev *nfc_dev)
 	return nci_set_config(ndev, NCI_LF_CON_BITR_F, 1, &val);
 }
 
+struct nci_listen_routing_param {
+	__u32 tm_protocols;
+};
+
+static void nci_set_listen_routing_req(struct nci_dev *ndev, const void *opt)
+{
+	const struct nci_listen_routing_param *param = opt;
+	__u8 cmd[2 + 3 * 5];
+	__u8 *p = cmd + 2;
+	__u8 n = 0;
+	__u8 pwr = (ndev->nci_ver & NCI_VER_2_MASK) ?
+		   NCI_ROUTE_PWR_SWITCHED_ON_ALL_V2 : NCI_ROUTE_PWR_SWITCHED_ON;
+
+#define NCI_ROUTE(type, value) do {				\
+		*p++ = (type);					\
+		*p++ = 3;					\
+		*p++ = NCI_NFCEE_ID_DH;				\
+		*p++ = pwr;					\
+		*p++ = (value);					\
+		n++;						\
+	} while (0)
+
+	/* ISO-DEP (and so all AIDs) to the host, not to an NFCEE */
+	NCI_ROUTE(NCI_ROUTE_TYPE_PROTOCOL, NCI_RF_PROTOCOL_ISO_DEP);
+	if (param->tm_protocols & NFC_PROTO_NFC_DEP_MASK)
+		NCI_ROUTE(NCI_ROUTE_TYPE_PROTOCOL, NCI_RF_PROTOCOL_NFC_DEP);
+	if (param->tm_protocols & NFC_PROTO_ISO14443_MASK)
+		NCI_ROUTE(NCI_ROUTE_TYPE_TECH, NCI_NFC_RF_TECHNOLOGY_A);
+	if (param->tm_protocols & NFC_PROTO_ISO14443_B_MASK)
+		NCI_ROUTE(NCI_ROUTE_TYPE_TECH, NCI_NFC_RF_TECHNOLOGY_B);
+#undef NCI_ROUTE
+
+	cmd[0] = 0;	/* last message */
+	cmd[1] = n;
+
+	nci_send_cmd(ndev, NCI_OP_RF_SET_LISTEN_MODE_ROUTING_CMD, p - cmd, cmd);
+}
+
+/* Listen as an ISO-DEP card, with the APDUs routed to the host */
+static int nci_set_listen_iso_dep(struct nfc_dev *nfc_dev, __u32 tm_protocols)
+{
+	struct nci_dev *ndev = nfc_get_drvdata(nfc_dev);
+	struct nci_listen_routing_param param = { .tm_protocols = tm_protocols };
+	int rc;
+	__u8 val;
+
+	rc = nci_request(ndev, nci_set_listen_routing_req, &param,
+			 msecs_to_jiffies(NCI_CMD_TIMEOUT));
+	if (rc) {
+		pr_err("failed to set listen mode routing (%d)\n", rc);
+		return rc;
+	}
+
+	val = NCI_LA_SEL_INFO_ISO_DEP_MASK;
+	if (tm_protocols & NFC_PROTO_NFC_DEP_MASK)
+		val |= NCI_LA_SEL_INFO_NFC_DEP_MASK;
+
+	rc = nci_set_config(ndev, NCI_LA_SEL_INFO, 1, &val);
+	if (rc)
+		return rc;
+
+	if (tm_protocols & NFC_PROTO_ISO14443_B_MASK) {
+		val = NCI_LB_SENSB_INFO_ISO_DEP_MASK;
+		rc = nci_set_config(ndev, NCI_LB_SENSB_INFO, 1, &val);
+	}
+
+	return rc;
+}
+
 static int nci_start_poll(struct nfc_dev *nfc_dev,
 			  __u32 im_protocols, __u32 tm_protocols)
 {
@@ -866,6 +953,13 @@ static int nci_start_poll(struct nfc_dev *nfc_dev,
 		rc = nci_set_listen_parameters(nfc_dev);
 		if (rc)
 			pr_err("failed to set listen parameters\n");
+	}
+
+	if (tm_protocols & (NFC_PROTO_ISO14443_MASK |
+			    NFC_PROTO_ISO14443_B_MASK)) {
+		rc = nci_set_listen_iso_dep(nfc_dev, tm_protocols);
+		if (rc)
+			return rc;
 	}
 
 	param.im_protocols = im_protocols;

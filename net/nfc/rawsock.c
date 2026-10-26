@@ -20,6 +20,9 @@ static struct nfc_sock_list raw_sk_list = {
 	.lock = __RW_LOCK_UNLOCKED(raw_sk_list.lock)
 };
 
+/* protects nfc_dev.raw_tm_sk */
+static DEFINE_SPINLOCK(raw_tm_lock);
+
 static void nfc_sock_link(struct nfc_sock_list *l, struct sock *sk)
 {
 	write_lock(&l->lock);
@@ -66,6 +69,13 @@ static int rawsock_release(struct socket *sock)
 
 	if (sock->type == SOCK_RAW)
 		nfc_sock_unlink(&raw_sk_list, sk);
+
+	if (nfc_rawsock(sk)->tm) {
+		spin_lock_bh(&raw_tm_lock);
+		if (nfc_rawsock(sk)->dev->raw_tm_sk == sk)
+			nfc_rawsock(sk)->dev->raw_tm_sk = NULL;
+		spin_unlock_bh(&raw_tm_lock);
+	}
 
 	if (sk->sk_state == TCP_ESTABLISHED) {
 		/* Prevent rawsock_tx_work from starting new transmits and
@@ -114,6 +124,20 @@ static int rawsock_connect(struct socket *sock, struct sockaddr *_addr,
 		goto error;
 	}
 
+	if (addr->target_idx == NFC_TARGET_IDX_TM) {
+		spin_lock_bh(&raw_tm_lock);
+		if (dev->raw_tm_sk) {
+			spin_unlock_bh(&raw_tm_lock);
+			rc = -EBUSY;
+			goto put_dev;
+		}
+		dev->raw_tm_sk = sk;
+		spin_unlock_bh(&raw_tm_lock);
+
+		nfc_rawsock(sk)->tm = true;
+		goto connected;
+	}
+
 	if (addr->target_idx > dev->target_next_idx - 1 ||
 	    addr->target_idx < dev->target_next_idx - dev->n_targets) {
 		rc = -EINVAL;
@@ -124,6 +148,7 @@ static int rawsock_connect(struct socket *sock, struct sockaddr *_addr,
 	if (rc)
 		goto put_dev;
 
+connected:
 	nfc_rawsock(sk)->dev = dev;
 	nfc_rawsock(sk)->target_idx = addr->target_idx;
 	sock->state = SS_CONNECTED;
@@ -238,6 +263,12 @@ static int rawsock_sendmsg(struct socket *sock, struct msghdr *msg, size_t len)
 		return rc;
 	}
 
+	/* card emulation: a response to the reader, no completion to wait for */
+	if (nfc_rawsock(sk)->tm) {
+		rc = nfc_tm_data_send(dev, skb);
+		return rc ? rc : len;
+	}
+
 	spin_lock_bh(&sk->sk_write_queue.lock);
 	__skb_queue_tail(&sk->sk_write_queue, skb);
 	if (!nfc_rawsock(sk)->tx_work_scheduled) {
@@ -317,9 +348,10 @@ static void rawsock_destruct(struct sock *sk)
 	pr_debug("sk=%p\n", sk);
 
 	if (sk->sk_state == TCP_ESTABLISHED) {
-		nfc_deactivate_target(nfc_rawsock(sk)->dev,
-				      nfc_rawsock(sk)->target_idx,
-				      NFC_TARGET_MODE_IDLE);
+		if (!nfc_rawsock(sk)->tm)
+			nfc_deactivate_target(nfc_rawsock(sk)->dev,
+					      nfc_rawsock(sk)->target_idx,
+					      NFC_TARGET_MODE_IDLE);
 		nfc_put_device(nfc_rawsock(sk)->dev);
 	}
 
@@ -365,6 +397,34 @@ static int rawsock_create(struct net *net, struct socket *sock,
 	}
 
 	return 0;
+}
+
+/* Card emulation: an APDU from the external reader */
+int nfc_rawsock_tm_recv(struct nfc_dev *dev, struct sk_buff *skb)
+{
+	struct sock *sk;
+	int rc = 0;
+
+	spin_lock_bh(&raw_tm_lock);
+	sk = dev->raw_tm_sk;
+	if (sk)
+		sock_hold(sk);
+	spin_unlock_bh(&raw_tm_lock);
+
+	if (!sk) {
+		kfree_skb(skb);
+		return -ENOLINK;
+	}
+
+	/* same framing as data exchange: one status byte, 0 = ok */
+	rc = rawsock_add_header(skb);
+	if (!rc)
+		rc = sock_queue_rcv_skb(sk, skb);
+	if (rc)
+		kfree_skb(skb);
+
+	sock_put(sk);
+	return rc;
 }
 
 void nfc_send_to_raw_sock(struct nfc_dev *dev, struct sk_buff *skb,

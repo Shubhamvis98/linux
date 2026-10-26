@@ -30,6 +30,7 @@ struct nfc_rawsock {
 	u32 target_idx;
 	struct work_struct tx_work;
 	bool tx_work_scheduled;
+	bool tm;	/* card emulation endpoint (NFC_TARGET_IDX_TM) */
 };
 
 struct nfc_sock_list {
@@ -60,6 +61,8 @@ void nfc_llcp_free_sdp_tlv(struct nfc_llcp_sdp_tlv *sdp);
 void nfc_llcp_free_sdp_tlv_list(struct hlist_head *head);
 
 int __init rawsock_init(void);
+int nfc_rawsock_tm_recv(struct nfc_dev *dev, struct sk_buff *skb);
+int nfc_tm_data_send(struct nfc_dev *dev, struct sk_buff *skb);
 void rawsock_exit(void);
 
 int __init af_nfc_init(void);

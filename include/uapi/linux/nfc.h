@@ -285,6 +285,13 @@ struct sockaddr_nfc_llcp {
 };
 
 /* NFC socket protocols */
+/*
+ * Raw socket target index for card emulation: connect() a raw socket with
+ * this target_idx to receive the commands of an external reader (ISO-DEP
+ * listen mode) and send the responses with send().
+ */
+#define NFC_TARGET_IDX_TM	0xffffffff
+
 #define NFC_SOCKPROTO_RAW	0
 #define NFC_SOCKPROTO_LLCP	1
 #define NFC_SOCKPROTO_MAX	2

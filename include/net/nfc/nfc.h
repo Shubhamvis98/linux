@@ -177,6 +177,7 @@ struct nfc_dev {
 	bool polling;
 	struct nfc_target *active_target;
 	bool dep_link_up;
+	struct sock *raw_tm_sk;	/* card emulation raw socket */
 	struct nfc_genl_data genl_data;
 	u32 supported_protocols;
 

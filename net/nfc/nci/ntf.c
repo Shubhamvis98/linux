@@ -559,6 +559,11 @@ static int nci_extract_activation_params_iso_dep(struct nci_dev *ndev,
 		}
 		break;
 
+	case NCI_NFC_A_PASSIVE_LISTEN_MODE:
+	case NCI_NFC_B_PASSIVE_LISTEN_MODE:
+		/* RATS parameter / ATTRIB command: handled by the NFCC */
+		break;
+
 	default:
 		pr_err("unsupported activation_rf_tech_and_mode 0x%x\n",
 		       ntf->activation_rf_tech_and_mode);
@@ -784,7 +789,9 @@ static int nci_rf_intf_activated_ntf_packet(struct nci_dev *ndev,
 			break;
 
 		case NCI_NFC_A_PASSIVE_LISTEN_MODE:
-			/* no RF technology specific parameters */
+		case NCI_NFC_B_PASSIVE_LISTEN_MODE:
+			/* NCI 1.x has none, NCI 2.0 ones are not used */
+			data += ntf.rf_tech_specific_params_len;
 			break;
 
 		case NCI_NFC_F_PASSIVE_LISTEN_MODE:
@@ -906,6 +913,18 @@ listen:
 					       ndev->remote_gb_len);
 			if (err != NCI_STATUS_OK)
 				pr_err("error when signaling tm activation\n");
+		} else if (err == NCI_STATUS_OK &&
+			   ntf.rf_protocol == NCI_RF_PROTOCOL_ISO_DEP) {
+			/* Card emulation: an external reader selected us */
+			u32 prot = ntf.activation_rf_tech_and_mode ==
+				   NCI_NFC_B_PASSIVE_LISTEN_MODE ?
+				   NFC_PROTO_ISO14443_B_MASK :
+				   NFC_PROTO_ISO14443_MASK;
+
+			err = nfc_tm_activated(ndev->nfc_dev, prot,
+					       NFC_COMM_PASSIVE, NULL, 0);
+			if (err != NCI_STATUS_OK)
+				pr_err("error when signaling tm activation\n");
 		}
 	}
 
@@ -928,6 +947,12 @@ static int nci_rf_deactivate_ntf_packet(struct nci_dev *ndev,
 	conn_info = ndev->rf_conn_info;
 	if (!conn_info)
 		return 0;
+
+	/* card emulation: the reader went away (LLCP handles NFC-DEP) */
+	if (atomic_read(&ndev->state) == NCI_LISTEN_ACTIVE &&
+	    ndev->nfc_dev->rf_mode == NFC_RF_TARGET &&
+	    !ndev->nfc_dev->dep_link_up)
+		nfc_tm_deactivated(ndev->nfc_dev);
 
 	/* drop tx data queue */
 	skb_queue_purge(&ndev->tx_q);

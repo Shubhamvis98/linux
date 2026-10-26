@@ -129,6 +129,17 @@
 /* NCI Configuration Parameters masks */
 #define NCI_LA_SEL_INFO_ISO_DEP_MASK				0x20
 #define NCI_LA_SEL_INFO_NFC_DEP_MASK				0x40
+
+#define NCI_LB_SENSB_INFO					0x38
+#define NCI_LB_SENSB_INFO_ISO_DEP_MASK				0x01
+
+/* Listen mode routing (RF_SET_LISTEN_MODE_ROUTING) */
+#define NCI_ROUTE_TYPE_TECH					0x00
+#define NCI_ROUTE_TYPE_PROTOCOL					0x01
+#define NCI_NFCEE_ID_DH						0x00
+#define NCI_ROUTE_PWR_SWITCHED_ON				0x01
+/* NCI 2.0: switched on, in every screen sub-state */
+#define NCI_ROUTE_PWR_SWITCHED_ON_ALL_V2			0x39
 #define NCI_LF_PROTOCOL_TYPE_NFC_DEP_MASK			0x02
 #define NCI_LF_CON_BITR_F_212					0x02
 #define NCI_LF_CON_BITR_F_424					0x04
@@ -278,6 +289,8 @@ struct nci_rf_disc_map_cmd {
 					[NCI_MAX_NUM_MAPPING_CONFIGS];
 } __packed;
 
+#define NCI_OP_RF_SET_LISTEN_MODE_ROUTING_CMD	nci_opcode_pack(NCI_GID_RF_MGMT, 0x01)
+
 #define NCI_OP_RF_DISCOVER_CMD		nci_opcode_pack(NCI_GID_RF_MGMT, 0x03)
 struct disc_config {
 	__u8	rf_tech_and_mode;
@@ -377,6 +390,7 @@ struct nci_core_conn_create_rsp {
 
 #define NCI_OP_RF_DISCOVER_MAP_RSP	nci_opcode_pack(NCI_GID_RF_MGMT, 0x00)
 
+#define NCI_OP_RF_SET_LISTEN_MODE_ROUTING_RSP	nci_opcode_pack(NCI_GID_RF_MGMT, 0x01)
 #define NCI_OP_RF_DISCOVER_RSP		nci_opcode_pack(NCI_GID_RF_MGMT, 0x03)
 
 #define NCI_OP_RF_DISCOVER_SELECT_RSP	nci_opcode_pack(NCI_GID_RF_MGMT, 0x04)

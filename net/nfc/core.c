@@ -653,15 +653,33 @@ EXPORT_SYMBOL(nfc_get_local_general_bytes);
 
 int nfc_tm_data_received(struct nfc_dev *dev, struct sk_buff *skb)
 {
-	/* Only LLCP target mode for now */
-	if (dev->dep_link_up == false) {
-		kfree_skb(skb);
-		return -ENOLINK;
-	}
+	/* Not LLCP: card emulation, hand the APDU to the raw tm socket */
+	if (dev->dep_link_up == false)
+		return nfc_rawsock_tm_recv(dev, skb);
 
 	return nfc_llcp_data_received(dev, skb);
 }
 EXPORT_SYMBOL(nfc_tm_data_received);
+
+int nfc_tm_data_send(struct nfc_dev *dev, struct sk_buff *skb)
+{
+	int rc;
+
+	device_lock(&dev->dev);
+
+	if (dev->rf_mode != NFC_RF_TARGET || dev->dep_link_up ||
+	    !dev->ops->tm_send) {
+		kfree_skb(skb);
+		rc = -ENOLINK;
+		goto out;
+	}
+
+	rc = dev->ops->tm_send(dev, skb);
+
+out:
+	device_unlock(&dev->dev);
+	return rc;
+}
 
 int nfc_tm_activated(struct nfc_dev *dev, u32 protocol, u8 comm_mode,
 		     const u8 *gb, size_t gb_len)
